@@ -1,0 +1,1 @@
+# CLI shortcuts (run, lint, test, format)

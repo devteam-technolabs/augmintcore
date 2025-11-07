@@ -1,0 +1,135 @@
+# --- Python cache & bytecode ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+!.env.example  # Keep example env file
+
+# --- PyInstaller ---
+#  Usually contains build artifacts
+build/
+dist/
+*.spec
+
+# --- Unit test / coverage ---
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+test_results/
+junit-*.xml
+
+# --- Jupyter Notebook ---
+.ipynb_checkpoints
+
+# --- Mypy / Pyright / Pyre / Ruff / Pylint ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pyright/
+.ruff_cache/
+
+# --- Logs & Temp ---
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# --- IDE / Editor specific ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+*.qodo
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+
+# --- Database files ---
+*.db
+*.sqlite3
+*.sqlite
+instance/
+
+# --- Alembic migrations cache ---
+alembic/versions/__pycache__/
+alembic.ini.bak
+
+# --- Docker / Compose ---
+docker/*.pid
+docker/logs/
+*.pid
+*.pid.lock
+
+# --- Node / Frontend builds (if serving static assets) ---
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+*.tsbuildinfo
+
+# --- Static / Media files (runtime generated) ---
+staticfiles/
+media/
+uploads/
+
+# --- Cache / Lock files ---
+*.lock
+*.pid
+celerybeat-schedule
+celerybeat.pid
+
+# --- VSCode workspace settings ---
+.vscode/
+.history/
+
+# --- Coverage / reports / docs ---
+site/
+docs/_build/
+*.pdf
+*.html
+
+# --- Compiled C extensions ---
+*.so
+
+# --- Poetry ---
+poetry.lock
+# (optional, if you use Poetry and want lock file committed, remove above line)
+
+# --- PyEnv / Pipenv ---
+.python-version
+Pipfile.lock
+
+# --- pytype ---
+.pytype/
+
+# --- wheel / dist artifacts ---
+*.egg-info/
+*.egg
+.eggs/
+
+# --- Local development ---
+.local/
+.cache/
+__pypackages__/
+.envrc

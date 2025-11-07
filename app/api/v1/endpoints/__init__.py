@@ -1,0 +1,1 @@
+# Structure all your routers according to your version (e.g., v1, v2) and then according to your features (e.g., users, auth, products). It makes your API modular and prepare it for future versioning.

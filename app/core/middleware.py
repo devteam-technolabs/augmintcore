@@ -1,0 +1,1 @@
+# Global middlewares (CORS, error handling)
