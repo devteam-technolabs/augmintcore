@@ -4,14 +4,16 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.core import events
 from app.core.config import get_settings
 from app.db.session import engine
-from app.core import events
 
 settings = get_settings()
 
+
 def create_app() -> FastAPI:
-    app = FastAPI(title='augmint_core', debug=settings.DEBUG)
+    app = FastAPI(title="augmint_core", debug=settings.DEBUG)
 
     # CORS
     origins = settings.CORS_ORIGINS or []
@@ -27,9 +29,8 @@ def create_app() -> FastAPI:
     # app.include_router(api_router, prefix="/api")
 
     # Startup and shutdown events
-    
-    
 
     return app
+
 
 app = create_app()

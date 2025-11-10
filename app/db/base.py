@@ -1,5 +1,5 @@
-from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import MetaData
+from sqlalchemy.orm import DeclarativeBase
 
 # Use naming convention for Alembic-friendly migrations
 convention = {
@@ -11,6 +11,7 @@ convention = {
 }
 
 metadata = MetaData(naming_convention=convention)
+
 
 class Base(DeclarativeBase):
     metadata = metadata

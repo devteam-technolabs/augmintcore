@@ -1,6 +1,8 @@
 from typing import List, Optional
+
 from pydantic import AnyHttpUrl, Field
 from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     # Application
@@ -39,7 +41,6 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
 
+
 def get_settings() -> Settings:
     return Settings()
-
-
