@@ -1,5 +1,6 @@
 from typing import List, Optional
-from pydantic import BaseSettings, AnyHttpUrl, Field
+from pydantic import AnyHttpUrl, Field
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Application
@@ -13,18 +14,18 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # Database
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "postgres"
-    POSTGRES_DB: str = "augmint_db"
-    POSTGRES_HOST: str = "127.0.0.1"
-    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int
 
     # Database
     DATABASE_URL: Optional[str] = None
     DB_ECHO: bool = False
 
     # Security
-    SECRET_KEY: str = ''
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
