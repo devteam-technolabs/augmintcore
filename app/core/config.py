@@ -1,10 +1,10 @@
 from typing import List, Optional
-
-from pydantic import AnyHttpUrl, Field
+from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings
 
-
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     # Application
     APP_NAME: str = "AugmintCore"
     APP_VERSION: str = "1.0.0"
@@ -16,13 +16,13 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # Database
+    DATABASE_URL: str 
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     POSTGRES_HOST: str
     POSTGRES_PORT: int
 
-    # Database
     DATABASE_URL: Optional[str] = None
     DB_ECHO: bool = False
 
@@ -37,9 +37,20 @@ class Settings(BaseSettings):
     CORS_ALLOW_METHODS: List[str] = ["*"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # --- SMTP (Email) ---
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str
+    SMTP_PASSWORD: str
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
+    ALGORITHM = "HS256"
+
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 300  # 30 hours
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 7 days   
+    REFRESH_SECRET_KEY: str
+    ALGORITHM: str = "HS256"   
+    ACCESS_SECRET_KEY: str  
 
 
 def get_settings() -> Settings:
