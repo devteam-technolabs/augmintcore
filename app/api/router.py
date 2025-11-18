@@ -83,24 +83,28 @@ async def verify_otp(
 ):
     user = await crud_user.verify_email(db, data.email, data.otp)
 
+    access = create_access_token({'user_id': user.id})
+    refresh = create_refresh_token({'user_id': user.id})
+
     return {
         "message": "Email verified successfully!",
-        "user": user
+        "user": user,
+        "access_token": access,
+        "refresh_token": refresh,
+        "token_type" : "bearer"
     }
 
 
 @router.post("/create-address", response_model=UserWithAddressResponse)
 async def create_address(
     data: AddressCreate,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user = Depends(crud_user.get_current_user)
 ):
-    # 1. Check if user exists
-    user = await db.get(User, data.user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User does not exist")
+    user = current_user
 
     # 2. Create new address
-    address = await crud_user.create_address(db, data)
+    address = await crud_user.create_address(db, data, user.id)
 
     # 3. Attach to user
     user.address = address
@@ -111,7 +115,9 @@ async def create_address(
     }
 
 @router.post("/enable-mfa",response_model=MFAEnableResponse)
-async def enable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session)):
+async def enable_mfa(db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+    user = current_user
+    user_id = user.id
     # Query user (ASYNC)
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -140,7 +146,9 @@ async def enable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session)
     }
 
 @router.post("/verify-mfa", response_model=MFAVerifyResponse)
-async def verify_mfa(user_id: int, otp: str, db: AsyncSession = Depends(get_async_session)):
+async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+    user = current_user
+    user_id = user.id
     # Fetch user
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -194,7 +202,9 @@ async def verify_mfa(user_id: int, otp: str, db: AsyncSession = Depends(get_asyn
 
 
 @router.post("/disable-mfa",response_model=MFAVerifyResponse)
-async def disable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session)):
+async def disable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session),current_user = Depends(crud_user.get_current_user)):
+    user = current_user
+    user_id = user.id
     # Fetch user
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -218,7 +228,9 @@ async def disable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session
 
 
 @router.post("/reset-mfa",response_model=MFAResetResponse)
-async def reset_mfa(user_id: int, db: AsyncSession = Depends(get_async_session)):
+async def reset_mfa(user_id: int, db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+    user = current_user
+    user_id = user.id
     # Fetch user
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()

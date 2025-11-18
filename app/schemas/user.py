@@ -60,7 +60,9 @@ class UserResponse(BaseModel):
 class MessageUserResponse(BaseModel):
     message: str
     user: UserResponse
-    model_config = ConfigDict(from_attributes=True)
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    token_type: Optional[str] = None
 
 
 class VerifyEmailRequest(BaseModel):
@@ -80,7 +82,6 @@ class VerifyOtpRequest(BaseModel):
 # ADDRESS CREATE
 # --------------------
 class AddressCreate(BaseModel):
-    user_id: int
     street_address: str
     city: str
     state: Optional[str] = None

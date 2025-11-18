@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy.orm import relationship
 from sqlalchemy import ForeignKey
 # Import Base from your shared base file, not from declarative_base()
-from app.db.base import Base  # <-- adjust this path based on your project layout
+from app.db.base import Base
 
 from passlib.context import CryptContext
 
@@ -14,7 +14,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)   # <-- correct field
+    hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=True)
     phone_number = Column(String(20), nullable=True)
     country_code = Column(String(10), nullable=True)

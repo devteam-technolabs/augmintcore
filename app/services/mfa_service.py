@@ -18,7 +18,6 @@ def generate_totp_uri(email: str, secret: str):
     return pyotp.totp.TOTP(secret).provisioning_uri(email, issuer_name=issuer)
 
 def generate_qr_code(uri: str):
-   
 
     qr = qrcode.make(uri)
     buffered = BytesIO()

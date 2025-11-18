@@ -4,9 +4,6 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-
-
-
 def create_access_token(data: dict, minutes: int = 15):
     payload = data.copy()
     payload["exp"] = datetime.utcnow() + timedelta(minutes=minutes)

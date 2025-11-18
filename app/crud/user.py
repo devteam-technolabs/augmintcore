@@ -2,9 +2,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.user import User, Address
 from app.utils.hashing import hash_password
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from datetime import datetime, timedelta
 import random
+from fastapi.security import OAuth2PasswordBearer
+from app.core.config import get_settings
+from app.db.session import get_async_session
+from jose import JWTError, jwt
+
+settings = get_settings()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+
 
 class CRUDUser:
 
@@ -80,9 +89,9 @@ class CRUDUser:
 
         return user
     
-    async def create_address(self, db, obj_in):
+    async def create_address(self, db, obj_in, user_id: int):
         db_obj = Address(
-            user_id=obj_in.user_id,
+            user_id=user_id,
             street_address=obj_in.street_address,
             city=obj_in.city,
             state=obj_in.state,
@@ -93,6 +102,26 @@ class CRUDUser:
         await db.commit()
         await db.refresh(db_obj)
         return db_obj
+
+    @staticmethod
+    async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_async_session)) -> User:
+        credentials_exception = HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        try:
+            payload = jwt.decode(token, settings.ACCESS_SECRET_KEY, algorithms=[settings.ALGORITHM])
+            user_id = payload.get('user_id')
+            if user_id is None:
+                raise credentials_exception
+        except JWTError:
+            raise credentials_exception
+        
+        user = await db.get(User, int(user_id))
+        if not user:
+            raise credentials_exception
+        return user
 
 
 crud_user = CRUDUser()
