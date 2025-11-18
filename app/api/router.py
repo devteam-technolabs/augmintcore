@@ -135,7 +135,7 @@ async def enable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session)
     return {
         "message": "MFA enabled",
         "secret": secret,
-        "qr_code_base64": qr_code,
+        "qr_code_base64": f"data:image/png;base64,{qr_code}",
         "user": user
     }
 
@@ -243,7 +243,7 @@ async def reset_mfa(user_id: int, db: AsyncSession = Depends(get_async_session))
     return {
         "message": "MFA reset successful. Scan the new QR code.",
         "new_secret": new_secret,
-        "qr_code_base64": qr_code,
+        "qr_code_base64": f"data:image/png;base64,{qr_code}",
         "user": user
     }
 
