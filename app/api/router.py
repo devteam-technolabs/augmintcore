@@ -172,12 +172,14 @@ async def verify_mfa(
     db: AsyncSession = Depends(get_async_session),
     current_user=Security(crud_user.get_current_user),
 ):
-
     user = current_user
     user_id = user.id
-    if not otp or len(otp) != 6:
-        raise HTTPException(400, "Invalid OTP format")
 
+    # --- Validate OTP format ---
+    if not otp or len(otp) != 6 or not otp.isdigit():
+        raise HTTPException(status_code=400, detail="Invalid OTP format")
+
+    # --- Load user with relations ---
     result = await db.execute(
         select(User)
         .options(selectinload(User.addresses))
@@ -190,36 +192,41 @@ async def verify_mfa(
 
     if not user.mfa_secret:
         raise HTTPException(status_code=400, detail="MFA is not enabled for this user")
-    
-    access_token = ""
-    refresh_tokens= ""
+
+    # --- If already verified ---
     if user.is_mfa_enabled:
-        # access_token = create_access_token(data={"sub": str(user.id)},
-        #         minutes=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-        # refresh_token = create_refresh_token({"sub": str(user.id)})
+        access_token = create_access_token(
+            {"sub": str(user.id)},
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        )
+        refresh_token = create_refresh_token({"sub": str(user.id)})
 
         return {
             "message": "MFA already verified",
             "access_token": access_token,
-            "refresh_token": refresh_tokens,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
             "user": user,
         }
 
+    # --- Verify TOTP ---
     totp = pyotp.TOTP(user.mfa_secret)
 
     if not totp.verify(otp):
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
+    # --- Mark MFA as Completed ---
     user.is_mfa_enabled = True
     await db.commit()
     await db.refresh(user)
 
-    # access_token = create_access_token(
-    #     {"sub": str(user.id)},
-    #     minutes=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-    # )
-    # refresh_token = create_refresh_token({"sub": str(user.id)})
+    # --- Generate Tokens ---
+    access_token = create_access_token(
+        {"sub": str(user.id)},
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
+
+    refresh_token = create_refresh_token({"sub": str(user.id)})
 
     return {
         "message": "MFA verified successfully",
@@ -228,7 +235,6 @@ async def verify_mfa(
         "token_type": "bearer",
         "user": user,
     }
-
 
 @router.post("/disable-mfa", response_model=MFAVerifyResponse)
 async def disable_mfa(
