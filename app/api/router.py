@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from fastapi import Query
 
 from app.core.config import get_settings
 from app.crud.user import crud_user
@@ -21,6 +22,7 @@ from app.schemas.user import (
     UserResponse,
     UserWithAddressResponse,
     VerifyOtpRequest,
+    MFAVerifyRequest
 )
 from app.services.auth_service import create_access_token, create_refresh_token
 from app.services.email_service import send_verification_email
@@ -163,15 +165,19 @@ async def enable_mfa(
         user=user,
     )
 
+
 @router.post("/verify-mfa", response_model=MFAVerifyResponse)
 async def verify_mfa(
-    otp: str,
+    otp: str = Query(...),
     db: AsyncSession = Depends(get_async_session),
     current_user=Security(crud_user.get_current_user),
 ):
+
     user = current_user
     user_id = user.id
-    # Fetch user
+    if not otp or len(otp) != 6:
+        raise HTTPException(400, "Invalid OTP format")
+
     result = await db.execute(
         select(User)
         .options(selectinload(User.addresses))
@@ -184,10 +190,12 @@ async def verify_mfa(
 
     if not user.mfa_secret:
         raise HTTPException(status_code=400, detail="MFA is not enabled for this user")
+    
 
-    # Already verified?
+
     if user.is_mfa_enabled:
-        access_token = create_access_token({"sub": str(user.id)})
+        access_token = create_access_token(data={"sub": str(user.id)},
+                expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
         refresh_token = create_refresh_token({"sub": str(user.id)})
 
         return {
@@ -200,21 +208,17 @@ async def verify_mfa(
 
     totp = pyotp.TOTP(user.mfa_secret)
 
-    # Validate OTP
     if not totp.verify(otp):
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
-    # Mark MFA as verified
     user.is_mfa_enabled = True
     await db.commit()
     await db.refresh(user)
 
-    # Generate tokens
     access_token = create_access_token(
         {"sub": str(user.id)},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
     return {

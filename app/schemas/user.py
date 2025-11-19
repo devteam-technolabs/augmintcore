@@ -184,3 +184,5 @@ class ResetPasswordRequest(BaseModel):
             raise ValueError("Passwords do not match")
         return v
 
+class MFAVerifyRequest(BaseModel):
+    otp: str
