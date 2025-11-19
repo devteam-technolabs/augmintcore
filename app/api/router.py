@@ -187,7 +187,7 @@ async def verify_mfa(
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
     # Mark MFA as verified
-    user.is_mfa_verified = True
+    user.is_mfa_enabled = True
     await db.commit()
     await db.refresh(user)
 
