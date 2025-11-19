@@ -131,7 +131,7 @@ async def enable_mfa(
     # Generate secret
     secret = generate_mfa_secret()
     user.mfa_secret = secret
-    user.is_mfa_enabled = True
+    user.is_mfa_enabled = False
 
     # Save to DB
     await db.commit()
