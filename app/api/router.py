@@ -195,7 +195,7 @@ async def verify_mfa(
 
     if user.is_mfa_enabled:
         access_token = create_access_token(data={"sub": str(user.id)},
-                expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+                minutes=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
         refresh_token = create_refresh_token({"sub": str(user.id)})
 
         return {
