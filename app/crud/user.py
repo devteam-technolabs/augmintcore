@@ -1,18 +1,23 @@
+import random
+from datetime import datetime, timedelta
+
+from fastapi import Depends, HTTPException
+
+# from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.models.user import User, Address
-from app.utils.hashing import hash_password
-from fastapi import Depends, HTTPException
-from datetime import datetime, timedelta
-import random
-from fastapi.security import OAuth2PasswordBearer
+
 from app.core.config import get_settings
 from app.db.session import get_async_session
-from jose import JWTError, jwt
+from app.models.user import Address, User
+from app.utils.hashing import hash_password
 
 settings = get_settings()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+bearer_scheme = HTTPBearer()
 
 
 class CRUDUser:
@@ -38,7 +43,6 @@ class CRUDUser:
         await db.commit()
         await db.refresh(db_obj)
         return db_obj
-    
 
     async def resend_otp(self, db, email: str):
         query = select(User).where(User.email == email)
@@ -59,7 +63,6 @@ class CRUDUser:
         await db.refresh(user)
 
         return user
-    
 
     async def verify_email(self, db, email: str, otp: int):
         query = select(User).where(User.email == email)
@@ -73,7 +76,9 @@ class CRUDUser:
             raise HTTPException(status_code=400, detail="Email already verified")
 
         if user.email_otp_expiry < datetime.utcnow():
-            raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
+            raise HTTPException(
+                status_code=400, detail="OTP has expired. Please request a new one."
+            )
 
         if user.email_otp != otp:
             raise HTTPException(status_code=400, detail="Invalid OTP")
@@ -88,7 +93,7 @@ class CRUDUser:
         await db.refresh(user)
 
         return user
-    
+
     async def create_address(self, db, obj_in, user_id: int):
         db_obj = Address(
             user_id=user_id,
@@ -96,7 +101,7 @@ class CRUDUser:
             city=obj_in.city,
             state=obj_in.state,
             zip_code=obj_in.zip_code,
-            country=obj_in.country
+            country=obj_in.country,
         )
         db.add(db_obj)
         await db.commit()
@@ -104,23 +109,29 @@ class CRUDUser:
         return db_obj
 
     @staticmethod
-    async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_async_session)) -> User:
-        credentials_exception = HTTPException(
-            status_code=401,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    async def get_current_user(
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        db: AsyncSession = Depends(get_async_session),
+    ) -> User:
+        token = credentials.credentials
+        # credentials_exception = HTTPException(
+        #     status_code=401,
+        #     detail="Could not validate credentials",
+        #     headers={"WWW-Authenticate": "Bearer"},
+        # )
         try:
-            payload = jwt.decode(token, settings.ACCESS_SECRET_KEY, algorithms=[settings.ALGORITHM])
-            user_id = payload.get('user_id')
-            if user_id is None:
-                raise credentials_exception
+            payload = jwt.decode(
+                token, settings.ACCESS_SECRET_KEY, algorithms=[settings.ALGORITHM]
+            )
+            user_id = payload.get("user_id")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid Token")
         except JWTError:
-            raise credentials_exception
-        
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
         user = await db.get(User, int(user_id))
         if not user:
-            raise credentials_exception
+            raise HTTPException(status_code=401, detail="User not found")
         return user
 
 

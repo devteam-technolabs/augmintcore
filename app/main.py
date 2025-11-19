@@ -2,21 +2,19 @@
 # FastAPI entrypoint (create_app function)
 # Go simple, but think grandly.
 
+import inspect
+import logging
+import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.api.router import router as api_router
 from app.core import events
 from app.core.config import get_settings
 from app.db.session import engine
-
-import time
-import logging
-import inspect
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
-from app.api.router import router as api_router
-
-
 
 settings = get_settings()
 logger = logging.getLogger(__name__)

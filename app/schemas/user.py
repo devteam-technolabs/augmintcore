@@ -1,7 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field, validator, ConfigDict
+import re
 from datetime import datetime
 from typing import Optional
-import re
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
 
 
 class UserCreate(BaseModel):
@@ -33,10 +34,10 @@ class UserCreate(BaseModel):
         return v
 
 
-
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
 
 class UserResponse(BaseModel):
     id: int
@@ -77,7 +78,6 @@ class VerifyOtpRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-
 # --------------------
 # ADDRESS CREATE
 # --------------------
@@ -87,6 +87,7 @@ class AddressCreate(BaseModel):
     state: Optional[str] = None
     zip_code: str
     country: str
+
 
 class AddressResponse(BaseModel):
     id: int
@@ -99,6 +100,7 @@ class AddressResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 # --------------------
 # FINAL RETURN FOR CREATE ADDRESS
@@ -126,6 +128,7 @@ class MFAEnableResponse(BaseModel):
     user: UserResponse
     model_config = ConfigDict(from_attributes=True)
 
+
 class MFAVerifyResponse(BaseModel):
     message: str
     access_token: str | None = None
@@ -134,7 +137,6 @@ class MFAVerifyResponse(BaseModel):
     user: UserResponse
 
     model_config = ConfigDict(from_attributes=True)
-
 
 
 class LoginResponse(BaseModel):
@@ -149,15 +151,18 @@ class LoginResponse(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
+
 class VerifyResetOTPRequest(BaseModel):
     email: EmailStr
     otp: str
+
 
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     otp: str
     new_password: str
     confirm_password: str
+
     @validator("new_password")
     def validate_password_strength(cls, v):
         if len(v) < 8:

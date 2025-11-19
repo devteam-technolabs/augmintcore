@@ -1,13 +1,16 @@
-import aiosmtplib
 from email.message import EmailMessage
+
+import aiosmtplib
+
 from app.core.config import get_settings
 
 settings = get_settings()
 
+
 async def send_verification_email(to_email: str, otp: int):
     msg = EmailMessage()
     msg["Subject"] = "Your Email Verification Code"
-    msg["From"] = settings.SMTP_USER   # MUST match Gmail login
+    msg["From"] = settings.SMTP_USER  # MUST match Gmail login
     msg["To"] = to_email
     msg.set_content(f"Your verification code is: {otp}")
 

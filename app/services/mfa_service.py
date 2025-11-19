@@ -1,8 +1,10 @@
+import base64
+import io
+from io import BytesIO
+
 import pyotp
 import qrcode
-import io
-import base64
-from io import BytesIO
+
 
 def generate_mfa_secret():
     return pyotp.random_base32()
@@ -17,6 +19,7 @@ def generate_totp_uri(email: str, secret: str):
     issuer = "AugmintCore"
     return pyotp.totp.TOTP(secret).provisioning_uri(email, issuer_name=issuer)
 
+
 def generate_qr_code(uri: str):
 
     qr = qrcode.make(uri)
@@ -24,4 +27,3 @@ def generate_qr_code(uri: str):
     qr.save(buffered, format="PNG")
 
     return base64.b64encode(buffered.getvalue()).decode()
-

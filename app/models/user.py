@@ -1,13 +1,14 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from datetime import datetime
+
+from passlib.context import CryptContext
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
-from sqlalchemy import ForeignKey
+
 # Import Base from your shared base file, not from declarative_base()
 from app.db.base import Base
 
-from passlib.context import CryptContext
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 class User(Base):
     __tablename__ = "users"
@@ -30,17 +31,19 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan")
+    addresses = relationship(
+        "Address", back_populates="user", cascade="all, delete-orphan"
+    )
 
     def set_password(self, password: str):
-        self.hashed_password = pwd_context.hash(password)   # <-- FIXED
+        self.hashed_password = pwd_context.hash(password)  # <-- FIXED
 
     def verify_password(self, password: str):
         return pwd_context.verify(password, self.hashed_password)  # <-- FIXED
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email})>"
-    
+
 
 class Address(Base):
     __tablename__ = "addresses"
@@ -54,4 +57,3 @@ class Address(Base):
     country = Column(String, nullable=False)
 
     user = relationship("User", back_populates="addresses")
-

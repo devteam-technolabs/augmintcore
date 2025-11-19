@@ -1,28 +1,36 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-import pyotp
-from app.db.session import get_async_session
-from app.schemas.user import (
-    UserCreate, MessageUserResponse, 
-    VerifyOtpRequest,
-    UserWithAddressResponse, 
-    AddressCreate, 
-    MFAResetResponse, 
-    MFAEnableResponse, 
-    MFAVerifyResponse,
-    UserResponse,
-    LoginResponse)
-from app.crud.user import crud_user
-from app.services.email_service import send_verification_email
-from app.models.user import User
-from sqlalchemy.future import select
-from app.services.mfa_service import generate_mfa_secret, generate_totp_uri, generate_qr_code
-from app.services.auth_service import create_access_token, create_refresh_token
 from datetime import timedelta
+
+import pyotp
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
 from app.core.config import get_settings
+from app.crud.user import crud_user
+from app.db.session import get_async_session
+from app.models.user import User
+from app.schemas.user import (
+    AddressCreate,
+    LoginResponse,
+    MessageUserResponse,
+    MFAEnableResponse,
+    MFAResetResponse,
+    MFAVerifyResponse,
+    UserCreate,
+    UserResponse,
+    UserWithAddressResponse,
+    VerifyOtpRequest,
+)
+from app.services.auth_service import create_access_token, create_refresh_token
+from app.services.email_service import send_verification_email
+from app.services.mfa_service import (
+    generate_mfa_secret,
+    generate_qr_code,
+    generate_totp_uri,
+)
+
 settings = get_settings()
 from jose import jwt
-
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -34,7 +42,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 async def signup(
     data: UserCreate,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
 ):
     user = await crud_user.get_by_email(db, data.email)
     if user:
@@ -48,7 +56,7 @@ async def signup(
 
     return {
         "message": "User created successfully. Please check your email to verify your account.",
-        "user": new_user
+        "user": new_user,
     }
 
 
@@ -59,18 +67,13 @@ async def signup(
 async def resend_otp(
     email: str,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
 ):
     user = await crud_user.resend_otp(db, email)
 
-    background_tasks.add_task(
-        send_verification_email, user.email, user.email_otp
-    )
+    background_tasks.add_task(send_verification_email, user.email, user.email_otp)
 
-    return {
-        "message": "A new OTP has been sent to your email.",
-        "user": user
-    }
+    return {"message": "A new OTP has been sent to your email.", "user": user}
 
 
 # -------------------------------
@@ -78,20 +81,19 @@ async def resend_otp(
 # -------------------------------
 @router.post("/verify-otp", response_model=MessageUserResponse)
 async def verify_otp(
-    data: VerifyOtpRequest,
-    db: AsyncSession = Depends(get_async_session)
+    data: VerifyOtpRequest, db: AsyncSession = Depends(get_async_session)
 ):
     user = await crud_user.verify_email(db, data.email, data.otp)
 
-    access = create_access_token({'user_id': user.id})
-    refresh = create_refresh_token({'user_id': user.id})
+    access = create_access_token({"user_id": user.id})
+    refresh = create_refresh_token({"user_id": user.id})
 
     return {
         "message": "Email verified successfully!",
         "user": user,
         "access_token": access,
         "refresh_token": refresh,
-        "token_type" : "bearer"
+        "token_type": "bearer",
     }
 
 
@@ -99,7 +101,7 @@ async def verify_otp(
 async def create_address(
     data: AddressCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user = Depends(crud_user.get_current_user)
+    current_user=Security(crud_user.get_current_user),
 ):
     user = current_user
 
@@ -109,13 +111,14 @@ async def create_address(
     # 3. Attach to user
     user.address = address
 
-    return {
-        "message": "Address created successfully",
-        "user": user
-    }
+    return {"message": "Address created successfully", "user": user}
 
-@router.post("/enable-mfa",response_model=MFAEnableResponse)
-async def enable_mfa(db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+
+@router.post("/enable-mfa", response_model=MFAEnableResponse)
+async def enable_mfa(
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(crud_user.get_current_user),
+):
     user = current_user
     user_id = user.id
     # Query user (ASYNC)
@@ -142,11 +145,16 @@ async def enable_mfa(db: AsyncSession = Depends(get_async_session), current_user
         "message": "MFA enabled",
         "secret": secret,
         "qr_code_base64": f"data:image/png;base64,{qr_code}",
-        "user": user
+        "user": user,
     }
 
+
 @router.post("/verify-mfa", response_model=MFAVerifyResponse)
-async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+async def verify_mfa(
+    otp: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(crud_user.get_current_user),
+):
     user = current_user
     user_id = user.id
     # Fetch user
@@ -169,7 +177,7 @@ async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), cu
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
-            "user": user
+            "user": user,
         }
 
     totp = pyotp.TOTP(user.mfa_secret)
@@ -186,7 +194,7 @@ async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), cu
     # Generate tokens
     access_token = create_access_token(
         {"sub": str(user.id)},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
     refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -196,13 +204,16 @@ async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), cu
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "user": user
+        "user": user,
     }
 
 
-
-@router.post("/disable-mfa",response_model=MFAVerifyResponse)
-async def disable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session),current_user = Depends(crud_user.get_current_user)):
+@router.post("/disable-mfa", response_model=MFAVerifyResponse)
+async def disable_mfa(
+    user_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(crud_user.get_current_user),
+):
     user = current_user
     user_id = user.id
     # Fetch user
@@ -223,12 +234,15 @@ async def disable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session
     await db.commit()
     await db.refresh(user)
 
-    return {"message": "MFA disabled successfully",
-            "user": user}
+    return {"message": "MFA disabled successfully", "user": user}
 
 
-@router.post("/reset-mfa",response_model=MFAResetResponse)
-async def reset_mfa(user_id: int, db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+@router.post("/reset-mfa", response_model=MFAResetResponse)
+async def reset_mfa(
+    user_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(crud_user.get_current_user),
+):
     user = current_user
     user_id = user.id
     # Fetch user
@@ -256,12 +270,14 @@ async def reset_mfa(user_id: int, db: AsyncSession = Depends(get_async_session),
         "message": "MFA reset successful. Scan the new QR code.",
         "new_secret": new_secret,
         "qr_code_base64": f"data:image/png;base64,{qr_code}",
-        "user": user
+        "user": user,
     }
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(email: str, password: str, db: AsyncSession = Depends(get_async_session)):
+async def login(
+    email: str, password: str, db: AsyncSession = Depends(get_async_session)
+):
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -289,22 +305,20 @@ async def login(email: str, password: str, db: AsyncSession = Depends(get_async_
         user=UserResponse.model_validate(user),
         access_token=access,
         refresh_token=refresh,
-        token_type="bearer"
+        token_type="bearer",
     )
-
 
 
 @router.post("/refresh-token")
 async def refresh_token(refresh_token: str):
     try:
-        payload = jwt.decode(refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(
+            refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
         user_id = payload.get("user_id")
 
         new_access = create_access_token({"user_id": user_id})
-        return {
-            "access_token": new_access,
-            "token_type": "bearer"
-        }
+        return {"access_token": new_access, "token_type": "bearer"}
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
