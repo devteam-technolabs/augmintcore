@@ -210,7 +210,6 @@ async def verify_mfa(
 
 @router.post("/disable-mfa", response_model=MFAVerifyResponse)
 async def disable_mfa(
-    user_id: int,
     db: AsyncSession = Depends(get_async_session),
     current_user=Security(crud_user.get_current_user),
 ):
@@ -239,7 +238,6 @@ async def disable_mfa(
 
 @router.post("/reset-mfa", response_model=MFAResetResponse)
 async def reset_mfa(
-    user_id: int,
     db: AsyncSession = Depends(get_async_session),
     current_user=Security(crud_user.get_current_user),
 ):
