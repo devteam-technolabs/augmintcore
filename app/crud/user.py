@@ -136,3 +136,6 @@ class CRUDUser:
 
 
 crud_user = CRUDUser()
+
+
+
