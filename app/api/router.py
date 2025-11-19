@@ -191,17 +191,17 @@ async def verify_mfa(
     if not user.mfa_secret:
         raise HTTPException(status_code=400, detail="MFA is not enabled for this user")
     
-
-
+    access_token = ""
+    refresh_tokens= ""
     if user.is_mfa_enabled:
-        access_token = create_access_token(data={"sub": str(user.id)},
-                minutes=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-        refresh_token = create_refresh_token({"sub": str(user.id)})
+        # access_token = create_access_token(data={"sub": str(user.id)},
+        #         minutes=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+        # refresh_token = create_refresh_token({"sub": str(user.id)})
 
         return {
             "message": "MFA already verified",
             "access_token": access_token,
-            "refresh_token": refresh_token,
+            "refresh_token": refresh_tokens,
             "token_type": "bearer",
             "user": user,
         }
@@ -215,11 +215,11 @@ async def verify_mfa(
     await db.commit()
     await db.refresh(user)
 
-    access_token = create_access_token(
-        {"sub": str(user.id)},
-        minutes=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
-    refresh_token = create_refresh_token({"sub": str(user.id)})
+    # access_token = create_access_token(
+    #     {"sub": str(user.id)},
+    #     minutes=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    # )
+    # refresh_token = create_refresh_token({"sub": str(user.id)})
 
     return {
         "message": "MFA verified successfully",
