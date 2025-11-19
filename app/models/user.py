@@ -32,8 +32,9 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     addresses = relationship(
-        "Address", back_populates="user", cascade="all, delete-orphan"
+        "Address", back_populates="user", cascade="all, delete-orphan",lazy="selectin"
     )
+
 
     def set_password(self, password: str):
         self.hashed_password = pwd_context.hash(password)  # <-- FIXED

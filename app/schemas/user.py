@@ -30,9 +30,10 @@ class UserCreate(BaseModel):
 
     @validator("confirm_password")
     def passwords_match(cls, v, values):
-        if "password" in values and v != values["password"]:
+        if "new_password" in values and v != values["new_password"]:
             raise ValueError("Passwords do not match")
         return v
+
 
 
 class UserLogin(BaseModel):
@@ -179,6 +180,7 @@ class ResetPasswordRequest(BaseModel):
 
     @validator("confirm_password")
     def passwords_match(cls, v, values):
-        if "password" in values and v != values["password"]:
+        if "new_password" in values and v != values["new_password"]:
             raise ValueError("Passwords do not match")
         return v
+

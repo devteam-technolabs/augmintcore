@@ -131,7 +131,8 @@ async def enable_mfa(
 ):
     user = current_user
     user_id = user.id
-    # Query user (ASYNC)
+
+    # Load user with addresses
     result = await db.execute(
         select(User)
         .options(selectinload(User.addresses))
@@ -142,27 +143,25 @@ async def enable_mfa(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Generate secret
+    # Generate new MFA secret
     secret = generate_mfa_secret()
     user.mfa_secret = secret
-    user.is_mfa_enabled = False
-    
+    user.is_mfa_enabled = False  # Not verified yet
 
-    # Save to DB
+    # Save secret in DB
     await db.commit()
     await db.refresh(user)
-   
-    # Create QR URI and QR image
+
+    # Create QR URI + QR image
     uri = generate_totp_uri(user.email, secret)
-    qr_code = generate_qr_code(uri)
+    qr_code = generate_qr_code(uri)  # base64 string
 
-    return {
-        "message": "MFA enabled",
-        "secret": secret,
-        "qr_code_base64": f"data:image/png;base64,{qr_code}",
-        "user": user,
-    }
-
+    return MFAEnableResponse(
+        message="MFA secret generated. Scan the QR code to complete setup.",
+        secret=secret,
+        qr_code_base64=f"data:image/png;base64,{qr_code}",
+        user=user,
+    )
 
 @router.post("/verify-mfa", response_model=MFAVerifyResponse)
 async def verify_mfa(
