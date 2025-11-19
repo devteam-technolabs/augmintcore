@@ -4,6 +4,7 @@ import pyotp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.crud.user import crud_user
@@ -101,17 +102,26 @@ async def verify_otp(
 async def create_address(
     data: AddressCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user=Security(crud_user.get_current_user),
+    current_user = Security(crud_user.get_current_user),
 ):
     user = current_user
 
-    # 2. Create new address
-    address = await crud_user.create_address(db, data, user.id)
+    # 1. Create the address
+    await crud_user.create_address(db, data, user.id)
 
-    # 3. Attach to user
-    user.address = address
+    # 2. Reload user WITH address relationship
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.addresses))  # IMPORTANT
+        .where(User.id == user.id)
+    )
+    user_with_address = result.scalar_one()
 
-    return {"message": "Address created successfully", "user": user}
+    # 3. Return hydrated user
+    return {
+        "message": "Address created successfully",
+        "user": user_with_address
+    }
 
 
 @router.post("/enable-mfa", response_model=MFAEnableResponse)
@@ -122,7 +132,11 @@ async def enable_mfa(
     user = current_user
     user_id = user.id
     # Query user (ASYNC)
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.addresses))
+        .where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
 
     if not user:
@@ -132,11 +146,12 @@ async def enable_mfa(
     secret = generate_mfa_secret()
     user.mfa_secret = secret
     user.is_mfa_enabled = False
+    
 
     # Save to DB
     await db.commit()
     await db.refresh(user)
-
+   
     # Create QR URI and QR image
     uri = generate_totp_uri(user.email, secret)
     qr_code = generate_qr_code(uri)
@@ -158,7 +173,11 @@ async def verify_mfa(
     user = current_user
     user_id = user.id
     # Fetch user
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.addresses))
+        .where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
 
     if not user:
@@ -216,7 +235,11 @@ async def disable_mfa(
     user = current_user
     user_id = user.id
     # Fetch user
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.addresses))
+        .where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
 
     if not user:
@@ -244,7 +267,11 @@ async def reset_mfa(
     user = current_user
     user_id = user.id
     # Fetch user
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.addresses))
+        .where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
 
     if not user:
@@ -276,7 +303,12 @@ async def reset_mfa(
 async def login(
     email: str, password: str, db: AsyncSession = Depends(get_async_session)
 ):
-    result = await db.execute(select(User).where(User.email == email))
+  
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.addresses))
+        .where(User.email == email)
+    )
     user = result.scalar_one_or_none()
 
     if not user:

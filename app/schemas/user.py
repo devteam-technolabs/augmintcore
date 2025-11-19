@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 from typing import Optional
+from typing import List
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
 
@@ -52,8 +53,7 @@ class UserResponse(BaseModel):
     role: str
     created_at: datetime
     updated_at: datetime
-    address: Optional["AddressResponse"] = None
-
+    addresses: List["AddressResponse"] = Field(default_factory=list)
     class Config:
         from_attributes = True
 
