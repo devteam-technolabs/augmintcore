@@ -49,7 +49,7 @@ async def signup(
 ):
     user = await crud_user.get_by_email(db, data.email)
     if user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, error_message="Email already registered")
 
     new_user = await crud_user.create(db, data)
 
@@ -143,7 +143,7 @@ async def enable_mfa(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, error_message="User not found")
 
     # Generate new MFA secret
     secret = generate_mfa_secret()
@@ -177,7 +177,7 @@ async def verify_mfa(
 
     # --- Validate OTP format ---
     if not otp or len(otp) != 6 or not otp.isdigit():
-        raise HTTPException(status_code=400, detail="Invalid OTP format")
+        raise HTTPException(status_code=400, error_message="Invalid OTP format")
 
     # --- Load user with relations ---
     result = await db.execute(
@@ -188,10 +188,10 @@ async def verify_mfa(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, error_message="User not found")
 
     if not user.mfa_secret:
-        raise HTTPException(status_code=400, detail="MFA is not enabled for this user")
+        raise HTTPException(status_code=400, error_message="MFA is not enabled for this user")
 
     # --- If already verified ---
     if user.is_mfa_enabled:
@@ -213,7 +213,7 @@ async def verify_mfa(
     totp = pyotp.TOTP(user.mfa_secret)
 
     if not totp.verify(otp):
-        raise HTTPException(status_code=400, detail="Invalid OTP")
+        raise HTTPException(status_code=400, error_message="Invalid OTP")
 
     # --- Mark MFA as Completed ---
     user.is_mfa_enabled = True
@@ -252,10 +252,10 @@ async def disable_mfa(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, error_message="User not found")
 
     if not user.mfa_secret:
-        raise HTTPException(status_code=400, detail="MFA is not enabled")
+        raise HTTPException(status_code=400, error_message="MFA is not enabled")
 
     # Disable MFA
     user.mfa_secret = None
@@ -284,7 +284,7 @@ async def reset_mfa(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, error_message="User not found")
 
     # Generate new secret
     new_secret = pyotp.random_base32()
@@ -321,10 +321,10 @@ async def login(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="Invalid credentials")
+        raise HTTPException(status_code=404, error_message="Invalid credentials")
 
     if not user.verify_password(password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise HTTPException(status_code=400, error_message="Invalid credentials")
 
     # CASE 1: MFA Enabled → Do NOT issue tokens yet
     # if user.is_mfa_enabled:
@@ -360,9 +360,9 @@ async def refresh_token(refresh_token: str):
         return {"access_token": new_access, "token_type": "bearer"}
 
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Refresh token expired")
+        raise HTTPException(status_code=401, error_message="Refresh token expired")
     except Exception:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        raise HTTPException(status_code=401, error_message="Invalid refresh token")
 
 
 # @router.post("/forgot-password")
@@ -371,7 +371,7 @@ async def refresh_token(refresh_token: str):
 #     user = result.scalar_one_or_none()
 
 #     if not user:
-#         raise HTTPException(status_code=404, detail="User not found")
+#         raise HTTPException(status_code=404, error_message="User not found")
 
 #     otp = generate_reset_otp()
 #     user.reset_password_otp = otp
