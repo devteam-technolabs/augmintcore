@@ -4,8 +4,6 @@ import pyotp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
-from fastapi import Query
 
 from app.core.config import get_settings
 from app.crud.user import crud_user
@@ -22,7 +20,6 @@ from app.schemas.user import (
     UserResponse,
     UserWithAddressResponse,
     VerifyOtpRequest,
-    MFAVerifyRequest
 )
 from app.services.auth_service import create_access_token, create_refresh_token
 from app.services.email_service import send_verification_email
@@ -49,7 +46,7 @@ async def signup(
 ):
     user = await crud_user.get_by_email(db, data.email)
     if user:
-        raise HTTPException(status_code=400, error_message="Email already registered")
+        raise HTTPException(status_code=400, detail="Email already registered")
 
     new_user = await crud_user.create(db, data)
 
@@ -104,26 +101,17 @@ async def verify_otp(
 async def create_address(
     data: AddressCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user = Security(crud_user.get_current_user),
+    current_user=Security(crud_user.get_current_user),
 ):
     user = current_user
 
-    # 1. Create the address
-    await crud_user.create_address(db, data, user.id)
+    # 2. Create new address
+    address = await crud_user.create_address(db, data, user.id)
 
-    # 2. Reload user WITH address relationship
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.addresses))  # IMPORTANT
-        .where(User.id == user.id)
-    )
-    user_with_address = result.scalar_one()
+    # 3. Attach to user
+    user.address = address
 
-    # 3. Return hydrated user
-    return {
-        "message": "Address created successfully",
-        "user": user_with_address
-    }
+    return {"message": "Address created successfully", "user": user}
 
 
 @router.post("/enable-mfa", response_model=MFAEnableResponse)
@@ -133,72 +121,55 @@ async def enable_mfa(
 ):
     user = current_user
     user_id = user.id
-
-    # Load user with addresses
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.addresses))
-        .where(User.id == user_id)
-    )
+    # Query user (ASYNC)
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, error_message="User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
-    # Generate new MFA secret
+    # Generate secret
     secret = generate_mfa_secret()
     user.mfa_secret = secret
-    user.is_mfa_enabled = False  # Not verified yet
+    user.is_mfa_enabled = False
 
-    # Save secret in DB
+    # Save to DB
     await db.commit()
     await db.refresh(user)
 
-    # Create QR URI + QR image
+    # Create QR URI and QR image
     uri = generate_totp_uri(user.email, secret)
-    qr_code = generate_qr_code(uri)  # base64 string
+    qr_code = generate_qr_code(uri)
 
-    return MFAEnableResponse(
-        message="MFA secret generated. Scan the QR code to complete setup.",
-        secret=secret,
-        qr_code_base64=f"data:image/png;base64,{qr_code}",
-        user=user,
-    )
+    return {
+        "message": "MFA enabled",
+        "secret": secret,
+        "qr_code_base64": f"data:image/png;base64,{qr_code}",
+        "user": user,
+    }
 
 
 @router.post("/verify-mfa", response_model=MFAVerifyResponse)
 async def verify_mfa(
-    otp: str = Query(...),
+    otp: str,
     db: AsyncSession = Depends(get_async_session),
     current_user=Security(crud_user.get_current_user),
 ):
     user = current_user
     user_id = user.id
-
-    # --- Validate OTP format ---
-    if not otp or len(otp) != 6 or not otp.isdigit():
-        raise HTTPException(status_code=400, error_message="Invalid OTP format")
-
-    # --- Load user with relations ---
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.addresses))
-        .where(User.id == user_id)
-    )
+    # Fetch user
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, error_message="User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     if not user.mfa_secret:
-        raise HTTPException(status_code=400, error_message="MFA is not enabled for this user")
+        raise HTTPException(status_code=400, detail="MFA is not enabled for this user")
 
-    # --- If already verified ---
+    # Already verified?
     if user.is_mfa_enabled:
-        access_token = create_access_token(
-            {"sub": str(user.id)},
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        )
+        access_token = create_access_token({"sub": str(user.id)})
         refresh_token = create_refresh_token({"sub": str(user.id)})
 
         return {
@@ -209,21 +180,21 @@ async def verify_mfa(
             "user": user,
         }
 
-    # --- Verify TOTP ---
     totp = pyotp.TOTP(user.mfa_secret)
 
+    # Validate OTP
     if not totp.verify(otp):
-        raise HTTPException(status_code=400, error_message="Invalid OTP")
+        raise HTTPException(status_code=400, detail="Invalid OTP")
 
-    # --- Mark MFA as Completed ---
+    # Mark MFA as verified
     user.is_mfa_enabled = True
     await db.commit()
     await db.refresh(user)
 
-    # --- Generate Tokens ---
+    # Generate tokens
     access_token = create_access_token(
         {"sub": str(user.id)},
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
     refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -236,26 +207,24 @@ async def verify_mfa(
         "user": user,
     }
 
+
 @router.post("/disable-mfa", response_model=MFAVerifyResponse)
 async def disable_mfa(
+    user_id: int,
     db: AsyncSession = Depends(get_async_session),
     current_user=Security(crud_user.get_current_user),
 ):
     user = current_user
     user_id = user.id
     # Fetch user
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.addresses))
-        .where(User.id == user_id)
-    )
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, error_message="User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     if not user.mfa_secret:
-        raise HTTPException(status_code=400, error_message="MFA is not enabled")
+        raise HTTPException(status_code=400, detail="MFA is not enabled")
 
     # Disable MFA
     user.mfa_secret = None
@@ -270,21 +239,18 @@ async def disable_mfa(
 
 @router.post("/reset-mfa", response_model=MFAResetResponse)
 async def reset_mfa(
+    user_id: int,
     db: AsyncSession = Depends(get_async_session),
     current_user=Security(crud_user.get_current_user),
 ):
     user = current_user
     user_id = user.id
     # Fetch user
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.addresses))
-        .where(User.id == user_id)
-    )
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, error_message="User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     # Generate new secret
     new_secret = pyotp.random_base32()
@@ -312,19 +278,14 @@ async def reset_mfa(
 async def login(
     email: str, password: str, db: AsyncSession = Depends(get_async_session)
 ):
-  
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.addresses))
-        .where(User.email == email)
-    )
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, error_message="Invalid credentials")
+        raise HTTPException(status_code=404, detail="Invalid credentials")
 
     if not user.verify_password(password):
-        raise HTTPException(status_code=400, error_message="Invalid credentials")
+        raise HTTPException(status_code=400, detail="Invalid credentials")
 
     # CASE 1: MFA Enabled → Do NOT issue tokens yet
     # if user.is_mfa_enabled:
@@ -360,9 +321,9 @@ async def refresh_token(refresh_token: str):
         return {"access_token": new_access, "token_type": "bearer"}
 
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, error_message="Refresh token expired")
+        raise HTTPException(status_code=401, detail="Refresh token expired")
     except Exception:
-        raise HTTPException(status_code=401, error_message="Invalid refresh token")
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 
 # @router.post("/forgot-password")
@@ -371,7 +332,7 @@ async def refresh_token(refresh_token: str):
 #     user = result.scalar_one_or_none()
 
 #     if not user:
-#         raise HTTPException(status_code=404, error_message="User not found")
+#         raise HTTPException(status_code=404, detail="User not found")
 
 #     otp = generate_reset_otp()
 #     user.reset_password_otp = otp

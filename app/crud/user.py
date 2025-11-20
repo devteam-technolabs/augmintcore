@@ -50,10 +50,10 @@ class CRUDUser:
         user = result.scalar_one_or_none()
 
         if not user:
-            raise HTTPException(status_code=404, error_message="User not found")
+            raise HTTPException(status_code=404, detail="User not found")
 
         if user.is_email_verify:
-            raise HTTPException(status_code=400, error_message="Email already verified")
+            raise HTTPException(status_code=400, detail="Email already verified")
 
         user.email_otp = random.randint(100000, 999999)
         user.email_otp_expiry = datetime.utcnow() + timedelta(minutes=5)
@@ -70,18 +70,18 @@ class CRUDUser:
         user = result.scalar_one_or_none()
 
         if not user:
-            raise HTTPException(status_code=404, error_message="User not found")
+            raise HTTPException(status_code=404, detail="User not found")
 
         if user.is_email_verify:
-            raise HTTPException(status_code=400, error_message="Email already verified")
+            raise HTTPException(status_code=400, detail="Email already verified")
 
         if user.email_otp_expiry < datetime.utcnow():
             raise HTTPException(
-                status_code=400, error_message="OTP has expired. Please request a new one."
+                status_code=400, detail="OTP has expired. Please request a new one."
             )
 
         if user.email_otp != otp:
-            raise HTTPException(status_code=400, error_message="Invalid OTP")
+            raise HTTPException(status_code=400, detail="Invalid OTP")
 
         # Mark verified
         user.is_email_verify = True
@@ -116,7 +116,7 @@ class CRUDUser:
         token = credentials.credentials
         # credentials_exception = HTTPException(
         #     status_code=401,
-        #     error_message="Could not validate credentials",
+        #     detail="Could not validate credentials",
         #     headers={"WWW-Authenticate": "Bearer"},
         # )
         try:
@@ -125,13 +125,13 @@ class CRUDUser:
             )
             user_id = payload.get("user_id")
             if not user_id:
-                raise HTTPException(status_code=401, error_message="Invalid Token")
+                raise HTTPException(status_code=401, detail="Invalid Token")
         except JWTError:
-            raise HTTPException(status_code=401, error_message="Invalid or expired token")
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
 
         user = await db.get(User, int(user_id))
         if not user:
-            raise HTTPException(status_code=401, error_message="User not found")
+            raise HTTPException(status_code=401, detail="User not found")
         return user
 
 
