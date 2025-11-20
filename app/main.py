@@ -10,6 +10,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+from fastapi import FastAPI, HTTPException
+from starlette.authentication import AuthenticationError
+from app.core.exception_handlers import (
+    custom_http_exception_handler,
+    auth_middleware_exception_handler,
+)
 
 from app.api.router import router as api_router
 from app.core import events
@@ -32,7 +38,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         allow_credentials=True,
     )
+    # Override FastAPI HTTPException handler
+    app.add_exception_handler(HTTPException, custom_http_exception_handler)
 
+    # Override Authentication middleware handler
+    app.add_exception_handler(AuthenticationError, auth_middleware_exception_handler)
     # include API router
     app.include_router(api_router, prefix="/api")
 
