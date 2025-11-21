@@ -50,8 +50,14 @@ async def signup(
 
     new_user = await crud_user.create(db, data)
 
+    first_name = new_user.full_name.split(" ")[0] if new_user.full_name else "User"
+
     background_tasks.add_task(
-        send_verification_email, new_user.email, new_user.email_otp
+        send_verification_email,
+        new_user.email,
+        new_user.email_otp,
+        first_name,
+        title="Your OTP for Augmint"
     )
 
     return {
@@ -71,7 +77,12 @@ async def resend_otp(
 ):
     user = await crud_user.resend_otp(db, email)
 
-    background_tasks.add_task(send_verification_email, user.email, user.email_otp)
+    first_name = user.full_name.split(" ")[0] if user.full_name else "User"
+  
+    
+
+    background_tasks.add_task(send_verification_email, user.email, user.email_otp, first_name,
+        title="Your Resend OTP for Augmint")
 
     return {"message": "A new OTP has been sent to your email.", "user": user}
 
