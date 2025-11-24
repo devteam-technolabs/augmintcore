@@ -1,4 +1,7 @@
 from datetime import timedelta
+import random
+from datetime import datetime, timedelta
+from passlib.context import CryptContext
 
 import pyotp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
@@ -20,6 +23,8 @@ from app.schemas.user import (
     UserResponse,
     UserWithAddressResponse,
     VerifyOtpRequest,
+    ForgotPasswordRequest,VerifyResetOTPRequest,
+    ResetPasswordRequest
 )
 from app.services.auth_service import create_access_token, create_refresh_token
 from app.services.email_service import send_verification_email
@@ -337,21 +342,77 @@ async def refresh_token(refresh_token: str):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 
-# @router.post("/forgot-password")
-# async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_async_session)):
-#     result = await db.execute(select(User).where(User.email == data.email))
-#     user = result.scalar_one_or_none()
+@router.post("/forgot-password",response_model= MessageUserResponse)
+async def forgot_password(data: ForgotPasswordRequest,background_tasks:BackgroundTasks
+, db: AsyncSession = Depends(get_async_session)):
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
 
-#     if not user:
-#         raise HTTPException(status_code=404, detail="User not found")
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-#     otp = generate_reset_otp()
-#     user.reset_password_otp = otp
-#     user.reset_otp_created_at = datetime.utcnow()
+    otp = random.randint(100000, 999999)
+    user.email_otp = otp
+    user.email_otp_expiry = datetime.utcnow() + timedelta(minutes=5)
+    db.add(user)
 
-#     await db.commit()
+    await db.commit()
+    await db.refresh(user)
+    first_name = user.full_name.split(" ")[0] if user.full_name else "User"
+    background_tasks.add_task(send_verification_email, user.email, user.email_otp, first_name,
+        title="Your Reset OTP for Augmint")
 
-#     # TODO: send otp via email or sms
-#     print("Reset OTP:", otp)
+    # TODO: send otp via email or sms
+    print("Reset OTP:", otp)
 
-#     return {"message": "Reset OTP sent to registered email"}
+    return {"message": "Reset OTP sent to registered email","user":user}
+
+
+@router.post("/forgot_password_verify",response_model= MessageUserResponse)
+async def forgot_password_verify(data:VerifyOtpRequest,db:AsyncSession =Depends(get_async_session)):
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.email_otp != data.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    if user.email_otp_expiry < user.email_otp_expiry:
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    user.email_otp = None
+    user.email_otp_expiry = None
+    db.add(user)
+
+    await db.commit()
+    await db.refresh(user)
+
+    return {"message": "OTP verified successfully","user":user}
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+@router.post("/reset_password",response_model= MessageUserResponse)
+async def reset_password(data:ResetPasswordRequest,db:AsyncSession =Depends(get_async_session)):
+    results = await db.execute(select(User).where(User.email==data.email))
+    user = results.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if pwd_context.verify(data.new_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="New password must be different from old password")
+    
+    if data.new_password!=data.confirm_password:
+        raise HTTPException(status_code=400,detail="Passwords do not match.")
+
+    user.password= pwd_context.hash(data.new_password)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return {"message": "Password reset successfully","user":user}
+
+    
+    
+
+
