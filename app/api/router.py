@@ -2,7 +2,7 @@ from datetime import timedelta
 import random
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
-
+import re
 import pyotp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,13 +26,14 @@ from app.schemas.user import (
     ForgotPasswordRequest,VerifyResetOTPRequest,
     ResetPasswordRequest
 )
-from app.services.auth_service import create_access_token, create_refresh_token
+from app.services.auth_service import create_access_token, create_refresh_token,verify_passwword
 from app.services.email_service import send_verification_email
 from app.services.mfa_service import (
     generate_mfa_secret,
     generate_qr_code,
     generate_totp_uri,
 )
+from app.utils.hashing import hash_password
 
 settings = get_settings()
 from jose import jwt
@@ -404,8 +405,13 @@ async def reset_password(data:ResetPasswordRequest,db:AsyncSession =Depends(get_
     
     if data.new_password!=data.confirm_password:
         raise HTTPException(status_code=400,detail="Passwords do not match.")
-
-    user.password= pwd_context.hash(data.new_password)
+    
+    try:
+        verify_passwword(data.confirm_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    user.password= hash_password(data.new_password)
     db.add(user)
     await db.commit()
     await db.refresh(user)
