@@ -399,19 +399,18 @@ async def reset_password(data:ResetPasswordRequest,db:AsyncSession =Depends(get_
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    if pwd_context.verify(data.new_password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="New password must be different from old password")
-    
     if data.new_password!=data.confirm_password:
         raise HTTPException(status_code=400,detail="Passwords do not match.")
     
+
+    if pwd_context.verify(data.new_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="New password must be different from old password")
     try:
         verify_passwword(data.confirm_password)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    user.password= hash_password(data.new_password)
+    user.hashed_password= hash_password(data.confirm_password)
     db.add(user)
     await db.commit()
     await db.refresh(user)
