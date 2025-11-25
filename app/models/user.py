@@ -1,4 +1,5 @@
 from datetime import datetime
+from email.policy import default
 
 from passlib.context import CryptContext
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
@@ -27,6 +28,8 @@ class User(Base):
     mfa_secret = Column(String, nullable=True)
     is_mfa_enabled = Column(Boolean, default=False)
     is_phone_verify = Column(Boolean, default=False)
+    is_address_filled = Column(Boolean, default=False)
+    is_payment_done = Column(Boolean, default=False)
     role = Column(String(50), default="user")
     step = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)

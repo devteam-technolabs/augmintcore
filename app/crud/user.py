@@ -37,6 +37,7 @@ class CRUDUser:
             full_name=obj_in.full_name,
             phone_number=obj_in.phone_number,
             country_code=obj_in.country_code,
+            
         )
 
         db.add(db_obj)
@@ -85,6 +86,8 @@ class CRUDUser:
 
         # Mark verified
         user.is_email_verify = True
+        if user.is_email_verify ==True:
+            user.step=1
         user.email_otp = None
         user.email_otp_expiry = None
 
@@ -103,6 +106,7 @@ class CRUDUser:
             zip_code=obj_in.zip_code,
             country=obj_in.country,
         )
+        
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)

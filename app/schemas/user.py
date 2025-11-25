@@ -58,6 +58,7 @@ class UserResponse(BaseModel):
     addresses: List["AddressResponse"] = Field(default_factory=list)
     class Config:
         from_attributes = True
+    
 
 
 class MessageUserResponse(BaseModel):
@@ -66,6 +67,7 @@ class MessageUserResponse(BaseModel):
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     token_type: Optional[str] = None
+    status_code: Optional[int] = None
 
 
 class VerifyEmailRequest(BaseModel):
@@ -89,6 +91,7 @@ class AddressCreate(BaseModel):
     state: Optional[str] = None
     zip_code: str
     country: str
+    step : Optional[int] = 0
 
 
 class AddressResponse(BaseModel):
@@ -121,6 +124,7 @@ class MFAResetResponse(BaseModel):
     qr_code_base64: str
     user: UserResponse
     model_config = ConfigDict(from_attributes=True)
+    status_code :Optional[int] = None
 
 
 class MFAEnableResponse(BaseModel):
@@ -129,6 +133,7 @@ class MFAEnableResponse(BaseModel):
     qr_code_base64: str
     user: UserResponse
     model_config = ConfigDict(from_attributes=True)
+    status_code :Optional[int] = None
 
 
 class MFAVerifyResponse(BaseModel):
@@ -137,7 +142,7 @@ class MFAVerifyResponse(BaseModel):
     refresh_token: str | None = None
     token_type: str | None = "bearer"
     user: UserResponse
-
+    status_code :Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -148,6 +153,7 @@ class LoginResponse(BaseModel):
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     token_type: Optional[str] = None
+    status_code :Optional[int] = None
 
 
 class ForgotPasswordRequest(BaseModel):

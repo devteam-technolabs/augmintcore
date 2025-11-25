@@ -69,6 +69,7 @@ async def signup(
     return {
         "message": "User created successfully. Please check your email to verify your account.",
         "user": new_user,
+        "status_code":201
     }
 
 
@@ -90,7 +91,7 @@ async def resend_otp(
     background_tasks.add_task(send_verification_email, user.email, user.email_otp, first_name,
         title="Your Resend OTP for Augmint")
 
-    return {"message": "A new OTP has been sent to your email.", "user": user}
+    return {"message": "A new OTP has been sent to your email.", "user": user,"status_code":200}
 
 
 # -------------------------------
@@ -111,6 +112,7 @@ async def verify_otp(
         "access_token": access,
         "refresh_token": refresh,
         "token_type": "bearer",
+        "status_code":200
     }
 
 
@@ -121,14 +123,22 @@ async def create_address(
     current_user=Security(crud_user.get_current_user),
 ):
     user = current_user
+    result =await db.execute(select(User).where(User.id == user.id))
+    user = result.scalar_one_or_none()
 
     # 2. Create new address
     address = await crud_user.create_address(db, data, user.id)
 
     # 3. Attach to user
     user.address = address
+    user.is_address_filled = True
+    if user.is_address_filled == True:
+        user.step=2
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
 
-    return {"message": "Address created successfully", "user": user}
+    return {"message": "Address created successfully", "user": user,"status_code":201}
 
 
 @router.post("/enable-mfa", response_model=MFAEnableResponse)
@@ -163,6 +173,7 @@ async def enable_mfa(
         "secret": secret,
         "qr_code_base64": f"data:image/png;base64,{qr_code}",
         "user": user,
+        "status_code":200
     }
 
 
@@ -195,6 +206,7 @@ async def verify_mfa(
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "user": user,
+            "status_code":200
         }
 
     totp = pyotp.TOTP(user.mfa_secret)
@@ -222,6 +234,7 @@ async def verify_mfa(
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": user,
+        "status_code":200
     }
 
 
@@ -251,7 +264,7 @@ async def disable_mfa(
     await db.commit()
     await db.refresh(user)
 
-    return {"message": "MFA disabled successfully", "user": user}
+    return {"message": "MFA disabled successfully", "user": user,"status_code":200}
 
 
 @router.post("/reset-mfa", response_model=MFAResetResponse)
@@ -288,6 +301,7 @@ async def reset_mfa(
         "new_secret": new_secret,
         "qr_code_base64": f"data:image/png;base64,{qr_code}",
         "user": user,
+        "status_code":200
     }
 
 
@@ -323,6 +337,7 @@ async def login(
         access_token=access,
         refresh_token=refresh,
         token_type="bearer",
+        status_code=200
     )
 
 
@@ -355,6 +370,7 @@ async def forgot_password(data: ForgotPasswordRequest,background_tasks:Backgroun
     otp = random.randint(100000, 999999)
     user.email_otp = otp
     user.email_otp_expiry = datetime.utcnow() + timedelta(minutes=5)
+    print("step",user.step)
     db.add(user)
 
     await db.commit()
@@ -366,7 +382,7 @@ async def forgot_password(data: ForgotPasswordRequest,background_tasks:Backgroun
     # TODO: send otp via email or sms
     print("Reset OTP:", otp)
 
-    return {"message": "Reset OTP sent to registered email","user":user}
+    return {"message": "Reset OTP sent to registered email","user":user,"status_code":200}
 
 
 @router.post("/forgot_password_verify",response_model= MessageUserResponse)
@@ -390,7 +406,7 @@ async def forgot_password_verify(data:VerifyOtpRequest,db:AsyncSession =Depends(
     await db.commit()
     await db.refresh(user)
 
-    return {"message": "OTP verified successfully","user":user}
+    return {"message": "OTP verified successfully","user":user,"status_code":200}
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 @router.post("/reset_password",response_model= MessageUserResponse)
 async def reset_password(data:ResetPasswordRequest,db:AsyncSession =Depends(get_async_session)):
@@ -415,7 +431,7 @@ async def reset_password(data:ResetPasswordRequest,db:AsyncSession =Depends(get_
     await db.commit()
     await db.refresh(user)
 
-    return {"message": "Password reset successfully","user":user}
+    return {"message": "Password reset successfully","user":user,"status_code":200}
 
     
     
