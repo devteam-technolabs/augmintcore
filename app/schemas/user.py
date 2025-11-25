@@ -54,6 +54,7 @@ class UserResponse(BaseModel):
     role: str
     created_at: datetime
     updated_at: datetime
+    step: Optional[int] = 0
     addresses: List["AddressResponse"] = Field(default_factory=list)
     class Config:
         from_attributes = True

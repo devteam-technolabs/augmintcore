@@ -28,6 +28,7 @@ class User(Base):
     is_mfa_enabled = Column(Boolean, default=False)
     is_phone_verify = Column(Boolean, default=False)
     role = Column(String(50), default="user")
+    step = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
