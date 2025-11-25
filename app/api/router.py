@@ -217,13 +217,14 @@ async def verify_mfa(
 
     # Mark MFA as verified
     user.is_mfa_enabled = True
+    user.step =3
     await db.commit()
     await db.refresh(user)
 
     # Generate tokens
     access_token = create_access_token(
         {"sub": str(user.id)},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
     )
 
     refresh_token = create_refresh_token({"sub": str(user.id)})
