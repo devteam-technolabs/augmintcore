@@ -4,7 +4,7 @@ from typing import Optional
 from typing import List
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
-
+from typing import Literal
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -192,3 +192,11 @@ class ResetPasswordRequest(BaseModel):
 
 class MFAVerifyRequest(BaseModel):
     otp: str
+
+class CheckoutSessionSchemas(BaseModel):
+    plan_duration: Literal['monthly','yearly']
+    plan_name:str
+
+class CheckoutSessionResponse(BaseModel):
+    checkout_url: str
+    status_code :Optional[int] = None

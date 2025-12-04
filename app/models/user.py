@@ -1,8 +1,8 @@
 from datetime import datetime
 from email.policy import default
-
+import enum
 from passlib.context import CryptContext
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String,Enum as SAEnum
 from sqlalchemy.orm import relationship
 
 # Import Base from your shared base file, not from declarative_base()
@@ -18,6 +18,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=True)
+    stripe_customer_id = Column(String(255), nullable=True)
     phone_number = Column(String(20), nullable=True)
     country_code = Column(String(10), nullable=True)
     email_otp = Column(Integer, nullable=True)
@@ -38,6 +39,19 @@ class User(Base):
     addresses = relationship(
         "Address", back_populates="user", cascade="all, delete-orphan",lazy="selectin"
     )
+    subscriptions = relationship(
+        "Subscription",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    transactions = relationship(
+        "Transaction",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
 
 
     def set_password(self, password: str):
@@ -62,3 +76,54 @@ class Address(Base):
     country = Column(String, nullable=False)
 
     user = relationship("User", back_populates="addresses")
+
+class SubscriptionStatus(enum.Enum):
+    active = "active"
+    canceled = "canceled"
+    past_due = "past_due"
+    incomplete = "incomplete"
+    trialing = "trialing"
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+    
+    id = Column(Integer,primary_key=True,index=True)
+    user_id = Column(Integer,ForeignKey("users.id",ondelete="CASCADE"))
+    plan_name = Column(String(50), nullable=False)
+    plan_type = Column(String(50), nullable=False)
+    price = Column(Integer, nullable=False)
+    stripe_subscription_id = Column(String(255), nullable=True)
+    status = Column(SAEnum(SubscriptionStatus,name="subscription_status"),
+    nullable=True,
+    )  # active, canceled, past_due, etc.
+
+    period_start = Column(DateTime, nullable=True)
+    period_end = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # relationships
+    user = relationship("User", back_populates="subscriptions")
+    transactions = relationship(
+        "Transaction",
+        back_populates="subscription",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"))
+
+    amount = Column(Integer, nullable=False)  # amount in cents
+    currency = Column(String(10), default="usd")
+    stripe_event_id = Column(String(255), unique=True, nullable=False)
+    type = Column(String(50), nullable=False)  # invoice.paid, refund, etc.
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="transactions")
+    subscription = relationship("Subscription", back_populates="transactions")

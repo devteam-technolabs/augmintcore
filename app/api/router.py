@@ -7,9 +7,9 @@ import pyotp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
+from app.services.payment_service import payment_service
 from app.core.config import get_settings
-from app.crud.user import crud_user
+from app.auth.user import auth_user
 from app.db.session import get_async_session
 from app.models.user import User
 from app.schemas.user import (
@@ -50,11 +50,11 @@ async def signup(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_session),
 ):
-    user = await crud_user.get_by_email(db, data.email)
+    user = await auth_user.get_by_email(db, data.email)
     if user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    new_user = await crud_user.create(db, data)
+    new_user = await auth_user.create(db, data)
 
     first_name = new_user.full_name.split(" ")[0] if new_user.full_name else "User"
 
@@ -82,7 +82,7 @@ async def resend_otp(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_session),
 ):
-    user = await crud_user.resend_otp(db, email)
+    user = await auth_user.resend_otp(db, email)
 
     first_name = user.full_name.split(" ")[0] if user.full_name else "User"
   
@@ -101,7 +101,7 @@ async def resend_otp(
 async def verify_otp(
     data: VerifyOtpRequest, db: AsyncSession = Depends(get_async_session)
 ):
-    user = await crud_user.verify_email(db, data.email, data.otp)
+    user = await auth_user.verify_email(db, data.email, data.otp)
 
     access = create_access_token({"user_id": user.id})
     refresh = create_refresh_token({"user_id": user.id})
@@ -120,14 +120,14 @@ async def verify_otp(
 async def create_address(
     data: AddressCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user=Security(crud_user.get_current_user),
+    current_user=Security(auth_user.get_current_user),
 ):
     user = current_user
     result =await db.execute(select(User).where(User.id == user.id))
     user = result.scalar_one_or_none()
 
     # 2. Create new address
-    address = await crud_user.create_address(db, data, user.id)
+    address = await auth_user.create_address(db, data, user.id)
 
     # 3. Attach to user
     user.address = address
@@ -144,7 +144,7 @@ async def create_address(
 @router.post("/enable-mfa", response_model=MFAEnableResponse)
 async def enable_mfa(
     db: AsyncSession = Depends(get_async_session),
-    current_user=Security(crud_user.get_current_user),
+    current_user=Security(auth_user.get_current_user),
 ):
     user = current_user
     user_id = user.id
@@ -181,7 +181,7 @@ async def enable_mfa(
 async def verify_mfa(
     otp: str,
     db: AsyncSession = Depends(get_async_session),
-    current_user=Security(crud_user.get_current_user),
+    current_user=Security(auth_user.get_current_user),
 ):
     user = current_user
     user_id = user.id
@@ -243,7 +243,7 @@ async def verify_mfa(
 async def disable_mfa(
     user_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user=Security(crud_user.get_current_user),
+    current_user=Security(auth_user.get_current_user),
 ):
     user = current_user
     user_id = user.id
@@ -272,7 +272,7 @@ async def disable_mfa(
 async def reset_mfa(
     user_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user=Security(crud_user.get_current_user),
+    current_user=Security(auth_user.get_current_user),
 ):
     user = current_user
     user_id = user.id
@@ -318,6 +318,7 @@ async def login(
 
     if not user.verify_password(password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
+    print("stripe_id ",user.stripe_customer_id)
 
     # CASE 1: MFA Enabled → Do NOT issue tokens yet
     # if user.is_mfa_enabled:
@@ -434,7 +435,6 @@ async def reset_password(data:ResetPasswordRequest,db:AsyncSession =Depends(get_
 
     return {"message": "Password reset successfully","user":user,"status_code":200}
 
-    
     
 
 

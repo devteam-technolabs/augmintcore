@@ -18,6 +18,7 @@ from app.core.exception_handlers import (
 )
 
 from app.api.router import router as api_router
+from app.api.payment_routes import router as payment_router
 from app.core import events
 from app.core.config import get_settings
 from app.db.session import engine
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(AuthenticationError, auth_middleware_exception_handler)
     # include API router
     app.include_router(api_router, prefix="/api")
+    app.include_router(payment_router,prefix="/api")
 
     # Startup and shutdown events
     async def _on_startup() -> None:

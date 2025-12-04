@@ -13,14 +13,14 @@ from app.core.config import get_settings
 from app.db.session import get_async_session
 from app.models.user import Address, User
 from app.utils.hashing import hash_password
-
+from app.services.payment_service import payment_service
 settings = get_settings()
 
 # oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 bearer_scheme = HTTPBearer()
 
 
-class CRUDUser:
+class AuthUser:
 
     async def get_by_email(self, db: AsyncSession, email: str):
         result = await db.execute(select(User).where(User.email == email))
@@ -88,6 +88,8 @@ class CRUDUser:
         user.is_email_verify = True
         if user.is_email_verify ==True:
             user.step=1
+        stripe_id = await payment_service.create_stripe_customer_id(user)
+        user.stripe_customer_id = stripe_id
         user.email_otp = None
         user.email_otp_expiry = None
 
@@ -139,7 +141,7 @@ class CRUDUser:
         return user
 
 
-crud_user = CRUDUser()
+auth_user = AuthUser()
 
 
 
