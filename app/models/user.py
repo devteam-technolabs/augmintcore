@@ -31,6 +31,7 @@ class User(Base):
     is_phone_verify = Column(Boolean, default=False)
     is_address_filled = Column(Boolean, default=False)
     is_payment_done = Column(Boolean, default=False)
+    is_exchange_connected = Column(Boolean, default=False)
     role = Column(String(50), default="user")
     step = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -50,6 +51,9 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin"
+    )
+    exchange_accounts = relationship(
+        "UserExchange", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
 
 
@@ -127,3 +131,17 @@ class Transaction(Base):
 
     user = relationship("User", back_populates="transactions")
     subscription = relationship("Subscription", back_populates="transactions")
+
+
+class UserExchange(Base):
+    __tablename__ = "user_exchanges"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    exchange_name = Column(String(50), nullable=False)  # "coinbase"
+    api_key = Column(String(255), nullable=False)
+    api_secret = Column(String(255), nullable=False)
+    passphrase = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user = relationship("User", back_populates="exchange_accounts")

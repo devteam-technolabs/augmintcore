@@ -19,6 +19,7 @@ from app.core.exception_handlers import (
 
 from app.api.router import router as api_router
 from app.api.payment_routes import router as payment_router
+from app.api.exchange_routers import router as exchange_routers
 from app.core import events
 from app.core.config import get_settings
 from app.db.session import engine
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     # include API router
     app.include_router(api_router, prefix="/api")
     app.include_router(payment_router,prefix="/api")
+    app.include_router(exchange_routers,prefix="/api")
 
     # Startup and shutdown events
     async def _on_startup() -> None:

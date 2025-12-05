@@ -51,6 +51,7 @@ class UserResponse(BaseModel):
     is_email_verify: bool
     is_mfa_enabled: bool
     is_phone_verify: bool
+    is_exchange_connected: bool
     role: str
     created_at: datetime
     updated_at: datetime
