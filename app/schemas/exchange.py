@@ -19,3 +19,9 @@ class ExchangeConnectResponse(BaseModel):
     token_type: Optional[str] = None
     status_code: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
+
+class CCTXResponse(BaseModel):
+    message: str
+    status_code: Optional[int] = None
+    data: Optional[list] = None
+    model_config = ConfigDict(from_attributes=True)

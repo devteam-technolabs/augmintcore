@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
+import ccxt.async_support as ccxt
 from app.db.session import get_async_session
 from app.auth.user import auth_user
-from app.schemas.exchange import ExchangeConnectRequest, ExchangeConnectResponse
+from app.schemas.exchange import ExchangeConnectRequest, ExchangeConnectResponse, CCTXResponse
 from app.schemas.user import UserResponse
 from app.models.user import User, UserExchange
 from app.services.auth_service import create_access_token, create_refresh_token
@@ -14,7 +14,7 @@ from app.coinbase.exchange import validate_coinbase_api
 router = APIRouter(prefix="/exchange", tags=["Exchange"])
 
 
-@router.post("/connect", response_model=ExchangeConnectResponse)
+@router.post("/coinbase/connect", response_model=ExchangeConnectResponse)
 async def connect_exchange(
     data: ExchangeConnectRequest,
     db: AsyncSession = Depends(get_async_session),
@@ -79,4 +79,15 @@ async def connect_exchange(
         "refresh_token": refresh,
         "token_type": "bearer",
         "status_code": 200
+    }
+
+
+@router.get("/cctx", response_model=CCTXResponse)
+async def connect_exchange(
+):    # Just a test endpoint to list all exchanges in CCXT
+    exchnges_data = ccxt.exchanges
+    return {
+        "message": "List all exchanges in CCXT",
+        "status_code": 200,
+        "data": exchnges_data,
     }

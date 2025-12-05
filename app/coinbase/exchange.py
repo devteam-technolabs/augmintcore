@@ -2,6 +2,8 @@ import ccxt.async_support as ccxt  # MUST use async_support for async functions
 import asyncio
 
 async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str = None):
+
+    # print(ccxt.exchanges)
     client = None
     try:
         # Configuration for Coinbase Advanced
@@ -14,11 +16,11 @@ async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str =
         # Add passphrase ONLY if it's a Legacy Key (short secret string)
         # If using Cloud/CDP keys (long PEM secret), do not add password.
  
-        client = ccxt.coinbase.requiredCredentials(config)
+        client = ccxt.coinbase(config)
 
         # !!! CRITICAL FIX: You must use 'await' here !!!
         balance = await client.fetch_balance()
-        
+        print(balance)
         print("✅ Connection Successful!")
         return True
 
