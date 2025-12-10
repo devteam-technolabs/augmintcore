@@ -58,8 +58,8 @@ class PaymentService:
                     "quantity": 1,
                 }
             ],
-            success_url = "http://localhost:8000/success",
-            cancel_url = "http://localhost:8000/cancel",
+            success_url = "https://augmint.itechnolabs.tech/en/dashboard?payment=success",
+            cancel_url = "https://augmint.itechnolabs.tech/en/choose-your-plan?payment=failed",
             metadata = metadata
             
         )
