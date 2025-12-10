@@ -30,15 +30,15 @@ class PaymentService:
         plan_name= data.plan_name
         plan_duration = data.plan_duration   
         if plan_duration == "monthly":
-            if plan_name =="pro":
-                price_id = settings.PRICE_ID_MONTHLY["pro"]
-            elif plan_name =="premium":
+            if plan_name =="premium":
                 price_id = settings.PRICE_ID_MONTHLY["premium"]
+            elif plan_name =="business":
+                price_id = settings.PRICE_ID_MONTHLY["business"]
         elif plan_duration == "yearly":
-            if plan_name =="pro":
-                price_id = settings.PRICE_ID_YEARLY["pro"]
-            elif plan_name =="premium":
+            if plan_name =="premium":
                 price_id = settings.PRICE_ID_YEARLY["premium"]
+            elif plan_name =="business":
+                price_id = settings.PRICE_ID_YEARLY["business"]
         metadata = {
                 "user_id":int(user.id),
                 "plan_name":plan_name,
