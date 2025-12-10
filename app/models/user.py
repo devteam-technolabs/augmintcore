@@ -31,7 +31,7 @@ class User(Base):
     is_phone_verify = Column(Boolean, default=False)
     is_address_filled = Column(Boolean, default=False)
     is_payment_done = Column(Boolean, default=False)
-    is_exchange_connected = Column(Boolean, default=False)
+    is_exchange_connected = Column(Boolean, default=False,nullable=True)
     role = Column(String(50), default="user")
     step = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -100,7 +100,8 @@ class Subscription(Base):
     status = Column(SAEnum(SubscriptionStatus,name="subscription_status"),
     nullable=True,
     )  # active, canceled, past_due, etc.
-
+    cancel_at_period_end = Column(Boolean, nullable=True,default=False)
+    final_cancellation_date = Column(DateTime, nullable=True)
     period_start = Column(DateTime, nullable=True)
     period_end = Column(DateTime, nullable=True)
 

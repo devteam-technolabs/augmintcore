@@ -1,5 +1,6 @@
 from pydantic import HttpUrl
 from sqlalchemy.future import select
+import asyncio
 # from augmintcore.app.api import payment_routes
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,21 +82,23 @@ class PaymentService:
         status ,
         plan_start:datetime,
         plan_end:datetime,
-        event_id 
+        event_id ,
+        subscription_id
     ):
         result = await db.execute(select(Subscription).where(Subscription.user_id == user_id))
         subscription = result.scalar_one_or_none()
-        result_transaction = await db.execute(select(Transaction).where(Transaction.subscription_id == subscription.id))
-        transaction = result_transaction.scalar_one_or_none()
+        # result_transaction = await db.execute(select(Transaction).where(Transaction.subscription_id == subscription.id))
+        # transaction = result_transaction.scalar_one_or_none()
 
-        if subscription:
+        if subscription and subscription.cancel_at_period_end == False:
             subscription.plan_name=plan_name
             subscription.plan_type=plan_type
             subscription.status = status
             subscription.price = price
             subscription.period_start = plan_start
             subscription.period_end = plan_end
-            print("in if")
+            subscription.stripe_subscription_id = subscription_id
+            print("in if - updating existing subscription")
             db.add(subscription)
             #Also have to create the transaction 
             transaction_obj = Transaction(
@@ -118,7 +121,9 @@ class PaymentService:
                 price = price,
                 status = status,
                 period_start = plan_start,
-                period_end = plan_end
+                period_end = plan_end,
+                stripe_subscription_id = subscription_id,
+                
             )
             db.add(subscription)
             transaction_new = Transaction(
@@ -226,6 +231,26 @@ class PaymentService:
         await db.commit()
         await db.refresh(transaction)
         return subscripton
+
+    async def handle_cancel_subscription_at_period_end(
+        self,
+        db : AsyncSession,
+        user_id : int
+    ): 
+        result = await db.execute(select(Subscription).where(Subscription.user_id==user_id))
+        subscription = result.scalar_one_or_none()
+        
+        if not subscription:
+            raise HTTPException(status_code=404, detail="Subscription not found")
+        
+        await asyncio.to_thread(stripe.Subscription.modify,subscription.stripe_subscription_id,cancel_at_period_end=True)
+        subscription.status = "canceled"
+        subscription.cancel_at_period_end = True
+        subscription.final_cancellation_date = datetime.utcnow()
+        db.add(subscription)
+        await db.commit()
+        await db.refresh(subscription)
+        return subscription
 
     
 

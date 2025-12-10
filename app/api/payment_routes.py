@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timezone
 from importlib import metadata
 from app.db.session import get_async_session,AsyncSessionLocal
 import stripe 
@@ -39,20 +39,14 @@ async def create_checkout_session(data:CheckoutSessionSchemas,db:AsyncSession =D
 async def cancel_subscription(db:AsyncSession = Depends(get_async_session),current_user=Depends(auth_user.get_current_user)):
     user = current_user
     user_id = user.id 
-    subscription = await db.execute(select(Subscription).where(Subscription.user_id ==user_id))
-    subscription_obj = subscription.scalar_one_or_none()
-    if not subscription_obj:
-        raise HTTPException(status_code=404, detail="Subscription not found")
-    import asyncio
-    await asyncio.to_thread(stripe.Subscription.modify,subscription_obj.stripe_subscription_id, cancel_at_period_end=True)
-    subscription_obj.status ="cancelled"
-    await db.commit()
-    await db.refresh(subscription_obj)
-    return {
+    try:
+        subscription = await payment_service.handle_cancel_subscription_at_period_end(db,user_id)
+        return {
         "status_code":200,
         "message":"Subscription cancelled successfully"
-    }
-    
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/stripe_webhook", include_in_schema=False)
 async def stripe_webhook(request:Request):
@@ -71,48 +65,92 @@ async def stripe_webhook(request:Request):
     event_data = event["data"] ["object"]
      
     if event_type =="checkout.session.completed":
+        print("webhhok come in if condition")
         metadata= event_data["metadata"]
         user_id = int(metadata['user_id'])
         plan_name = metadata['plan_name']
         plan_type =metadata['plan_duration']
         subscription_id = event_data['subscription']
+        print("sub_id========>",subscription_id)
         event_id = event['id']
 
         stripe_sub = await asyncio.to_thread(stripe.Subscription.retrieve,subscription_id)
         print(stripe_sub,"stripe_sub ======")
         # plan_name = stripe_sub["items"]["data"][0]["price"]["nickname"]
         price = stripe_sub["items"]["data"][0]["price"]["unit_amount"]
+        amount_price = price / 100  # Convert cents to dollars
         status = stripe_sub["status"]
         # plan_type = stripe_sub["items"]["data"][0]["price"]["product"]
         print("here")
 
-        plan_start = (
-            datetime.utcfromtimestamp(stripe_sub["current_period_start"])
-            if stripe_sub.get("current_period_start")
-            else None
-        )
+        plan_start_timestamp = stripe_sub["items"]["data"][0]["current_period_start"]
+        plan_start = datetime.fromtimestamp(plan_start_timestamp)
+        
+        
 
-        plan_end = (
-            datetime.utcfromtimestamp(stripe_sub.get("current_period_end"))
-            if stripe_sub.get("current_period_end")
-            else None
-        )
+        plan_end_timestamp = stripe_sub["items"]["data"][0]["current_period_end"]
+        plan_end = datetime.fromtimestamp(plan_end_timestamp)
 
         async with AsyncSessionLocal() as session:
-            await payment_service.handle_subscription(user_id,session,plan_name,plan_type,price,status,plan_start,plan_end,event_id)
+            await payment_service.handle_subscription(user_id,session,plan_name,plan_type,amount_price,status,plan_start,plan_end,event_id,subscription_id)
             print("Subscription handled successfully")
 
     # Auto -Renewal
 
     elif event_type =="invoice.payment_succeeded":
-        try :
-            subscription_id = event.data.get("subscription")
+        print("webhhok come in invoice.payment_succeeded")
+        billing_reason = event_data.get("billing_reason")
+        if billing_reason == "subscription_cycle":
+            return
+        if billing_reason == "recurring":
+            try :
+                subscription_id = event.data.get("subscription")
 
-            async with AsyncSessionLocal() as session:
-                subscription = await payment_service.handle_auto_renewal(db =session,event_data=event_data,event_id = event['id'])
+                async with AsyncSessionLocal() as session:
+                    subscription = await payment_service.handle_auto_renewal(db =session,event_data=event_data,event_id = event['id'])
             
+            except Exception as e:
+                print(f"[WEBHOOK ERROR] invoice.payment_succeeded: {str(e)}")
+        
+    # SUBSCRIPTION DELETD PERMANENTLY
+
+    elif event_type =="customer.subscription.deleted":
+        try:
+            subscription_id = event_data.get("id")
+            async with AsyncSessionLocal() as session:
+                await payment_service.handle_subscription_deleted(subscription_id,session)
+                if subscription:
+                    print(f"[WEBHOOK] Subscription {subscription_id} fully deleted")
         except Exception as e:
-            print(f"[WEBHOOK ERROR] invoice.payment_succeeded: {str(e)}")
+            print(f"[WEBHOOK ERROR] customer.subscription.deleted: {str(e)}")
+
+    # SUBSCRIPTION UPDATED
+
+    elif event_type =="customer.subscription.updated":
+        try:
+            subscription_id = event_data.get("id")
+            cancel_at_period_end = event_data.get('cancel_at_period_end', False)
+            async with AsyncSessionLocal() as session:
+                subscription = await payment_service.handle_subscription_updated(
+                    db=session,
+                    stripe_subscription_id=subscription_id,
+                    cancel_at_period_end=cancel_at_period_end
+                )
+                
+                if subscription:
+                    if cancel_at_period_end:
+                        print(f"[WEBHOOK] Subscription {subscription_id} scheduled for cancellation")
+                    else:
+                        print(f"[WEBHOOK] Subscription {subscription_id} reactivated")
+
+        except Exception as e:
+            print(f"[WEBHOOK ERROR] customer.subscription.updated: {str(e)}")
+
+
+        
+    
+
+
 
     
 
