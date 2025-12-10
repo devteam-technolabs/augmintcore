@@ -54,14 +54,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_SECRET_KEY: str
     STRIPE_SECRET_KEY: str
-    PRICE_ID_YEARLY: dict = {
-        "pro":"price_1SXe4uGVbFVdpid59jvPhSnk",
-        "premium":"price_1SXJcaGVbFVdpid5GPWoCkXU",
-    }
-    PRICE_ID_MONTHLY: dict = {
-        "pro":"price_1SXJbGGVbFVdpid5AwiZuHRJ",
-        "premium":"price_1SXe3MGVbFVdpid54YziV9Ih",
-    }
+    PRICE_ID_YEARLY: dict 
+    PRICE_ID_MONTHLY: dict 
     STRIPE_WEBHOOK_SECRET: str
 
 
