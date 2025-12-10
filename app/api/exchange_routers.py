@@ -26,6 +26,9 @@ async def connect_exchange(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
+    
+    access = create_access_token({"user_id": user.id})
+    refresh = create_refresh_token({"user_id": user.id})
 
     # 2. Check duplicate
     exists = await db.execute(
@@ -35,7 +38,15 @@ async def connect_exchange(
         )
     )
     if exists.scalar_one_or_none():
-        raise HTTPException(400, f"{data.exchange_name} already connected")
+        return {
+            "message": "Coinbase already connected",
+            "user": user,
+            "access_token": access,
+            "refresh_token": refresh,
+            "token_type": "bearer",
+            "status_code": 200
+        }
+        
 
     # 3. Validate Coinbase credentials using CCXT
     is_valid = await validate_coinbase_api(
@@ -69,8 +80,7 @@ async def connect_exchange(
     await db.refresh(user_exchange)
 
     # 6. Generate tokens
-    access = create_access_token({"user_id": user.id})
-    refresh = create_refresh_token({"user_id": user.id})
+    
 
     return {
         "message": "Coinbase exchange connected successfully",
