@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     PRICE_ID_MONTHLY: dict 
     STRIPE_WEBHOOK_SECRET: str
 
+    # KMS
+    KMS_KEY_ID: str 
+    AWS_REGION:str
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+
 
 def get_settings() -> Settings:
     return Settings()

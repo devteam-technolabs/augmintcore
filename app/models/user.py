@@ -2,7 +2,7 @@ from datetime import datetime
 from email.policy import default
 import enum
 from passlib.context import CryptContext
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String,Enum as SAEnum
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String,Enum as SAEnum, Text
 from sqlalchemy.orm import relationship
 
 # Import Base from your shared base file, not from declarative_base()
@@ -141,8 +141,8 @@ class UserExchange(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     exchange_name = Column(String(50), nullable=False)  # "coinbase"
-    api_key = Column(String(255), nullable=False)
-    api_secret = Column(String(255), nullable=False)
-    passphrase = Column(String(255), nullable=True)
+    api_key = Column(Text, nullable=False)
+    api_secret = Column(Text, nullable=False)
+    passphrase = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="exchange_accounts")

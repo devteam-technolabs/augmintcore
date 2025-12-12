@@ -8,13 +8,13 @@ from app.schemas.exchange import ExchangeConnectRequest, ExchangeConnectResponse
 from app.schemas.user import UserResponse
 from app.models.user import User, UserExchange
 from app.services.auth_service import create_access_token, create_refresh_token
-
+from app.security.kms_service import encrypt_value, decrypt_value
 from app.coinbase.exchange import validate_coinbase_api
 
 router = APIRouter(prefix="/exchange", tags=["Exchange"])
 
 
-@router.post("/coinbase/connect", response_model=ExchangeConnectResponse)
+@router.post("/{exchange_name}/connect", response_model=ExchangeConnectResponse)
 async def connect_exchange(
     data: ExchangeConnectRequest,
     db: AsyncSession = Depends(get_async_session),
@@ -39,7 +39,7 @@ async def connect_exchange(
     )
     if exists.scalar_one_or_none():
         return {
-            "message": "Coinbase already connected",
+            "message": "{exchange_name} already connected",
             "user": user,
             "access_token": access,
             "refresh_token": refresh,
@@ -63,12 +63,13 @@ async def connect_exchange(
 
     # 4. Save exchange credentials
     user_exchange = UserExchange(
-        user_id=user.id,
-        exchange_name=data.exchange_name.lower(),
-        api_key=data.api_key,
-        api_secret=data.api_secret,
-        passphrase=data.passphrase,
-    )
+            user_id=user.id,
+            exchange_name=data.exchange_name.lower(),
+            api_key=await encrypt_value(data.api_key),
+            api_secret=await encrypt_value(data.api_secret),
+            passphrase=await encrypt_value(data.passphrase),
+        )
+
 
     db.add(user_exchange)
 
@@ -101,3 +102,31 @@ async def connect_exchange(
         "status_code": 200,
         "data": exchnges_data,
     }
+
+
+# @router.get("/{exchange_name}", response_model=dict)
+# async def get_exchange(
+#     exchange_name: str,
+#     db: AsyncSession = Depends(get_async_session),
+#     current_user: User = Security(auth_user.get_current_user)
+# ):
+#     exchange_name = exchange_name.lower()
+
+#     result = await db.execute(
+#         select(UserExchange).where(
+#             UserExchange.user_id == current_user.id,
+#             UserExchange.exchange_name == exchange_name
+#         )
+#     )
+#     ex = result.scalar_one_or_none()
+
+#     if not ex:
+#         raise HTTPException(404, "No API keys found for this exchange")
+
+#     return {
+#         "exchange": exchange_name,
+#         "api_key": await decrypt_value(ex.api_key),
+#         "api_secret": await decrypt_value(ex.api_secret),
+#         "passphrase": await decrypt_value(ex.passphrase) if ex.passphrase else None,
+#         "created_at": ex.created_at
+#     }
