@@ -8,13 +8,13 @@ from app.schemas.exchange import ExchangeConnectRequest, ExchangeConnectResponse
 from app.schemas.user import UserResponse
 from app.models.user import User, UserExchange
 from app.services.auth_service import create_access_token, create_refresh_token
-from app.security.kms_service import encrypt_value, decrypt_value
-from app.coinbase.exchange import validate_coinbase_api
+from app.security.kms_service import kms_service
+from app.coinbase.exchange import validate_coinbase_api,get_crypt_currencies,user_portfolio_data
 
 router = APIRouter(prefix="/exchange", tags=["Exchange"])
 
 
-@router.post("/{exchange_name}/connect", response_model=ExchangeConnectResponse)
+@router.post("/coinbase/connect", response_model=ExchangeConnectResponse)
 async def connect_exchange(
     data: ExchangeConnectRequest,
     db: AsyncSession = Depends(get_async_session),
@@ -65,9 +65,9 @@ async def connect_exchange(
     user_exchange = UserExchange(
             user_id=user.id,
             exchange_name=data.exchange_name.lower(),
-            api_key=await encrypt_value(data.api_key),
-            api_secret=await encrypt_value(data.api_secret),
-            passphrase=await encrypt_value(data.passphrase),
+            api_key=await kms_service.encrypt(data.api_key),
+            api_secret=await kms_service.encrypt(data.api_secret),
+            passphrase=await kms_service.encrypt(data.passphrase),
         )
 
 
@@ -75,6 +75,7 @@ async def connect_exchange(
 
     # 5. Mark user as connected
     user.is_exchange_connected = True
+    user.step = 3
 
     await db.commit()
     await db.refresh(user)
@@ -104,29 +105,55 @@ async def connect_exchange(
     }
 
 
-# @router.get("/{exchange_name}", response_model=dict)
-# async def get_exchange(
-#     exchange_name: str,
-#     db: AsyncSession = Depends(get_async_session),
-#     current_user: User = Security(auth_user.get_current_user)
-# ):
-#     exchange_name = exchange_name.lower()
+@router.get("/crypto/currenices",response_model=CCTXResponse)
+async def get_crypt_prices(exchange_name :str, db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user)):
 
-#     result = await db.execute(
-#         select(UserExchange).where(
-#             UserExchange.user_id == current_user.id,
-#             UserExchange.exchange_name == exchange_name
-#         )
-#     )
-#     ex = result.scalar_one_or_none()
+    results = await db.execute(select(User).where(User.id==current_user.id))
+    user = results.scalar_one_or_none()
 
-#     if not ex:
-#         raise HTTPException(404, "No API keys found for this exchange")
+    if not user:
+        raise HTTPException(404, "User not found")
+    
+    try:
 
-#     return {
-#         "exchange": exchange_name,
-#         "api_key": await decrypt_value(ex.api_key),
-#         "api_secret": await decrypt_value(ex.api_secret),
-#         "passphrase": await decrypt_value(ex.passphrase) if ex.passphrase else None,
-#         "created_at": ex.created_at
-#     }
+        crypto_values_data = await get_crypt_currencies(exchange_name,user,db)
+        return {
+            "message":"List of all crypto currencies",
+            "status_code": 200,
+            "data": crypto_values_data
+
+        }
+    except Exception as e:
+        return {
+            "message": "An error occured",
+            "status_code": 400,
+            "data":str(e)
+        }
+
+
+@router.get("/get-clean-portfolio")
+async def get_portfolio(exchange_name:str, db:AsyncSession=Depends(get_async_session),
+        current_user:User=Security(auth_user.get_current_user)):
+        results = await db.execute(select(User).where(User.id ==current_user.id))
+        user = results.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(404,"User not found")
+
+        try:
+            get_user_portfolio_data = await user_portfolio_data(exchange_name,user,db)
+
+            return {
+                "message": "List of all data ",
+                "status_code" :200,
+                "data": get_user_portfolio_data
+            }
+        except Exception as e:
+             return {
+            "message": "An error occured",
+            "status_code": 400,
+            "data":str(e)
+        }
+
+

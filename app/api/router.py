@@ -217,7 +217,7 @@ async def verify_mfa(
 
     # Mark MFA as verified
     user.is_mfa_enabled = True
-    user.step =3
+    user.step =4
     await db.commit()
     await db.refresh(user)
 
@@ -435,6 +435,7 @@ async def reset_password(data:ResetPasswordRequest,db:AsyncSession =Depends(get_
 
     return {"message": "Password reset successfully","user":user,"status_code":200}
 
-    
-
+@router.post("/logout")
+async def logout():
+    return {"message": "Logged out successfully"}
 

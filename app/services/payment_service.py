@@ -179,7 +179,7 @@ class PaymentService:
             raise HTTPException(status_code=404, detail="Subscription not found")
 
         subscription.status = "deleted"
-        subscription.cancel_at_period_end = False
+        subscription.cancel_at_period_end = True
         subscription.final_cancellation_date = datetime.utcnow()
         db.add(subscription)
         await db.commit()
