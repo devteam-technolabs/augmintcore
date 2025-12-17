@@ -110,13 +110,13 @@ async def user_portfolio_data(exchange_name,user,db):
     })
 
     try:
-        # 1️⃣ Fetch balances
+        # 1️Fetch balances
         balance = await exchange.fetch_balance()
 
         assets = []
         total_usd_value = 0.0
 
-        # 2️⃣ Load tickers once
+        # 2️Load tickers once
         tickers = await exchange.fetch_tickers()
 
         for symbol, data in balance.items():
