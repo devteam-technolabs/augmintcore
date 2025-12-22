@@ -5,6 +5,7 @@ from app.db.session import get_async_session
 from app.security.kms_service import  kms_service
 from app.models.user import User, UserExchange
 from fastapi import Depends
+from fastapi import HTTPException
 
 def clean_private_key(pem: str) -> str:
     return pem.replace("\\n", "\n").strip()

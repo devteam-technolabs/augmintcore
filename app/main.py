@@ -24,12 +24,14 @@ from app.core import events
 from app.core.config import get_settings
 from app.db.session import engine
 
+from app.api.websocket_routers import router as websocket_router 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="augmint_core", debug=settings.DEBUG)
+    # app = FastAPI(title="Crypto WebSocket Backend")
 
     # CORS
     origins = settings.CORS_ORIGINS or []
@@ -49,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix="/api")
     app.include_router(payment_router,prefix="/api")
     app.include_router(exchange_routers,prefix="/api")
+    app.include_router(websocket_router,prefix="/api")
 
     # Startup and shutdown events
     async def _on_startup() -> None:

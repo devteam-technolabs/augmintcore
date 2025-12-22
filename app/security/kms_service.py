@@ -15,7 +15,20 @@ class KMSService:
         )
         self.key_id = settings.KMS_KEY_ID
  
-    async def encrypt(self, value: str) -> str:
+    # async def encrypt(self, value: str) -> str:
+    #     try:
+    #         encrypted = self.client.encrypt(
+    #             KeyId=self.key_id,
+    #             Plaintext=value.encode("utf-8")
+    #         )
+    #         return base64.b64encode(encrypted["CiphertextBlob"]).decode()
+    #     except (BotoCoreError, ClientError) as e:
+    #         raise RuntimeError(f"KMS encryption failed: {e}")
+
+    async def encrypt(self, value: str | None) -> str | None:
+        if not value:
+            return None   # 👈 VERY IMPORTANT
+
         try:
             encrypted = self.client.encrypt(
                 KeyId=self.key_id,

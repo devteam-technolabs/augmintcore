@@ -65,5 +65,14 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str
 
 
+        # CRYPTO / MARKET APIS
+    # ===============================
+    COINGECKO_MARKETS_URL: str
+    COINBASE_REST_URL: str
+    COINBASE_CANDLES_PATH: str
+    COINBASE_WS_URL: str
+    DEFAULT_VS_CURRENCY: str = "usd"
+
+
 def get_settings() -> Settings:
     return Settings()
