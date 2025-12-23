@@ -19,7 +19,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=True)
     stripe_customer_id = Column(String(255), nullable=True)
-    phone_number = Column(String(20), nullable=True)
+    phone_number = Column(String(20), nullable=True,unique=True)
     country_code = Column(String(10), nullable=True)
     email_otp = Column(Integer, nullable=True)
     email_otp_expiry = Column(DateTime, nullable=True)

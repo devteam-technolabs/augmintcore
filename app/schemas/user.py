@@ -11,7 +11,8 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8)
     confirm_password: str = Field(..., min_length=8)
     full_name: Optional[str] = None
-    phone_number: Optional[str] = None
+    # phone_number: Optional[str] = None
+    phone_number: str = Field(..., description="Phone number must be unique across all users. Format: +[country_code][number], e.g., +1-123-456-7890")
     country_code: Optional[str] = None
 
     @validator("password")
@@ -34,6 +35,15 @@ class UserCreate(BaseModel):
             raise ValueError("Passwords do not match")
         return v
 
+    @validator("phone_number")
+    def validate_phone_number(cls, v):
+        # Basic format validation (adjust regex as needed for your requirements, e.g., international format)
+        if not re.match(r'^\+?\d{1,4}[-.\s]?\d{1,14}$', v):
+            raise ValueError("Invalid phone number format. Use international format like +1-123-456-7890")
+        # Note: Uniqueness must be enforced in the service/endpoint layer by querying the database
+        # (e.g., check if a user with this phone_number already exists before creating the user).
+        # Example: if User.query.filter_by(phone_number=v).first(): raise ValueError("Phone number already in use")
+        return v
 
 
 class UserLogin(BaseModel):
