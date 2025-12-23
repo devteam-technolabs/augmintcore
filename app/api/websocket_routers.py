@@ -10,7 +10,6 @@ settings = get_settings()
 
 router = APIRouter(prefix="/market", tags=["Market"])
 
-
 @router.websocket("/ws/crypto")
 async def crypto_socket(websocket: WebSocket):
     await websocket.accept()

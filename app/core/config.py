@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str
     PRICE_ID_YEARLY: dict 
     PRICE_ID_MONTHLY: dict 
-    STRIPE_WEBHOOK_SECRET: str
+    STRIPE_WEBHOOK_SECRET: str  
 
     # KMS
     KMS_KEY_ID: str 
