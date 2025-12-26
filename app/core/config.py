@@ -74,5 +74,12 @@ class Settings(BaseSettings):
     DEFAULT_VS_CURRENCY: str = "usd"
 
 
+    # coinbase
+    COINBASE_API_KEY: str
+    COINBASE_API_SECRET: str
+    COINBASE_API_PASSPHRASE: str
+    COINBASE_EXCHANGE_SANDBOX: bool = False
+
+
 def get_settings() -> Settings:
     return Settings()
