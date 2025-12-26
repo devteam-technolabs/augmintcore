@@ -174,6 +174,8 @@ async def crypto_socket(websocket: WebSocket):
 
 
 
+
+
 # 5:34
 # @router.websocket("/ws/crypto")
 # async def crypto_socket(websocket: WebSocket):
