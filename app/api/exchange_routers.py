@@ -9,7 +9,7 @@ from app.schemas.user import UserResponse
 from app.models.user import User, UserExchange
 from app.services.auth_service import create_access_token, create_refresh_token
 from app.security.kms_service import kms_service
-from app.coinbase.exchange import validate_coinbase_api,get_crypt_currencies,user_portfolio_data
+from app.coinbase.exchange import validate_coinbase_api,get_crypt_currencies,user_portfolio_data,get_total_coin_value,get_total_account_value
 
 router = APIRouter(prefix="/exchange", tags=["Exchange"])
 
@@ -155,5 +155,57 @@ async def get_portfolio(exchange_name:str, db:AsyncSession=Depends(get_async_ses
             "status_code": 400,
             "data":str(e)
         }
+
+@router.get("/total-coin-value")
+async def total_coin_value(
+    exchange_name: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user),
+):
+    # 1️⃣ Validate user
+    result = await db.execute(select(User).where(User.id == current_user.id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 2️⃣ Get total value
+    try:
+        data = await get_total_coin_value(exchange_name, user, db)
+
+        return {
+            "message": "Total coin value fetched successfully",
+            "status_code": 200,
+            "data": data,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to fetch total coin value: {str(e)}",
+        )
+
+
+
+@router.get("/portfolio/total-account-value")
+async def total_account_value(
+    exchange_name: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user),
+):
+    result = await db.execute(select(User).where(User.id == current_user.id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = await get_total_account_value(exchange_name.lower(), user, db)
+
+    return {
+        "message": "Total account value fetched successfully",
+        "status_code": 200,
+        "data": data,
+    }
+
 
 
