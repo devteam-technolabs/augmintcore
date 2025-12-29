@@ -328,3 +328,5 @@ async def get_total_account_value(exchange_name: str, user, db):
             await exchange.close()
 
 
+
+

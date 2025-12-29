@@ -1,16 +1,18 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import asyncio
-import httpx
+import time
 
 from app.websocket.coingecko import fetch_top_ten
 from app.websocket.coinbase import coinbase_ws_listener
 from app.core.config import get_settings
 from app.websocket.candels import fetch_candles
-import time
+from datetime import datetime, timezone
+
 
 settings = get_settings()
 
 router = APIRouter(prefix="/market", tags=["Market"])
+
 
 @router.websocket("/ws/crypto")
 @router.websocket("/ws/crypto/")
@@ -23,46 +25,62 @@ async def crypto_socket(websocket: WebSocket):
     granularity = int(websocket.query_params.get("granularity", 900))
 
     try:
-        # =====================================================
-        # 🔹 PRICE CHART MODE (EVERY SECOND UPDATE)
-        # =====================================================
         if symbol:
             symbol = symbol.upper()
+            product_id = f"{symbol}-USD"
+
+            last_candle_time = None  # ✅ track last candle
 
             async def candle_loop():
-                """Send candles every second"""
+                nonlocal last_candle_time
+
                 while True:
-                    candles = await fetch_candles(symbol, granularity)
+                    candle = await fetch_candles(symbol, granularity)
 
-                    await websocket.send_json({
-                        "type": "Price Chart",
-                        "channel": "CANDLES",
-                        "symbol": symbol,
-                        "granularity": granularity,
-                        "updated_at": int(time.time()),
-                        "data": candles["data"],
-                    })
+                    if candle:
+                        candle_time = candle["time"]
 
-                    await asyncio.sleep(1)  # 🔥 EVERY SECOND
+                        # ✅ SEND ONLY IF NEW CANDLE
+                        if candle_time != last_candle_time:
+                            last_candle_time = candle_time
+
+                            utc_time = datetime.fromtimestamp(
+                                candle_time, tz=timezone.utc
+                            )
+
+                            await websocket.send_json({
+                                "type": "Price_Chart",
+                                "symbol": product_id,
+                                "price": candle["close"],
+                                "granularity": granularity,
+                                "volume": candle["volume"],
+                                # "time": candle_time,                 # unix UTC
+                                "time_iso": utc_time.isoformat(),    # decoded
+                            })
+
+                    await asyncio.sleep(1)
 
             async def ticker_loop():
-                """Live ticker stream"""
                 while True:
                     ticker = await ticker_queue.get()
 
+                    volume = (
+                        float(ticker.get("volume"))
+                        if ticker.get("volume") is not None
+                        else float(ticker.get("last_size", 0))
+                    )
+
                     await websocket.send_json({
-                        "type": "Price Chart Data",
-                        "channel": "TICKER",
-                        "symbol": symbol,
-                        "data": {
-                            "price": ticker["price"],
-                            "open_24h": ticker["open_24h"],
-                            "time": ticker["time"],
-                        },
+                        "type": "Price_Chart",
+                        "symbol": product_id,
+                        "price": float(ticker["price"]),
+                        "granularity": granularity,
+                        "time": int(time.time()),   # realtime tick (UTC)
+                        "volume": volume,
                     })
 
             asyncio.create_task(
-                coinbase_ws_listener([symbol], ticker_queue)
+                coinbase_ws_listener([product_id], ticker_queue)
             )
 
             await asyncio.gather(
@@ -74,14 +92,14 @@ async def crypto_socket(websocket: WebSocket):
         # 🔹 TOP TEN MODE (EVERY TICK UPDATE)
         # =====================================================
         else:
-            price_cache = {}       # latest prices + sparkline
+            price_cache = {}
             last_top_ten = []
             sparkline_len = 100
 
-            top_ten = await fetch_top_ten()  # fetch initial data
+            top_ten = await fetch_top_ten()
             product_ids = [coin["product_id"] for coin in top_ten]
 
-            # 🔹 initialize cache ONCE (important)
+            # 🔹 initialize cache ONCE
             for coin in top_ten:
                 pid = coin["product_id"]
                 price_cache[pid] = {
@@ -90,7 +108,6 @@ async def crypto_socket(websocket: WebSocket):
                     "sparkline": [float(coin["price"])]
                 }
 
-            # 🔹 Send initial response
             formatted_top_ten = [
                 {
                     "id": coin.get("id", coin["product_id"].lower()),
@@ -106,7 +123,7 @@ async def crypto_socket(websocket: WebSocket):
 
             await websocket.send_json({
                 "type": "Top Ten Coins",
-                "channel": "TOP_TEN_INIT",
+                "channel": "TOP_TEN_COINS",
                 "data": formatted_top_ten,
             })
 
@@ -124,7 +141,6 @@ async def crypto_socket(websocket: WebSocket):
                 price = float(ticker["price"])
                 change = float(ticker.get("change", 0))
 
-                # 🔹 FIX: update cache WITHOUT overwriting sparkline
                 if product_id not in price_cache:
                     price_cache[product_id] = {
                         "price": price,
@@ -139,13 +155,11 @@ async def crypto_socket(websocket: WebSocket):
                     if len(price_cache[product_id]["sparkline"]) > sparkline_len:
                         price_cache[product_id]["sparkline"].pop(0)
 
-                # 🔹 Recalculate Top 10 by price
                 top_ten_sorted = sorted(
                     price_cache.items(),
                     key=lambda x: x[1]["price"],
                     reverse=True
                 )[:10]
-
                 # 🔹 ALWAYS update (do not block live updates)
                 last_top_ten = top_ten_sorted
 
@@ -164,12 +178,13 @@ async def crypto_socket(websocket: WebSocket):
 
                 await websocket.send_json({
                     "type": "Top Ten Coins",
-                    "channel": "TOP_TEN_UPDATE",
+                    "channel": "TOP_TEN_COINS",
                     "data": formatted_top_ten,
                 })
 
     except WebSocketDisconnect:
         print("❌ WebSocket disconnected")
+
 
 
 
