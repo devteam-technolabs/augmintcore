@@ -53,6 +53,11 @@ async def signup(
     user = await auth_user.get_by_email(db, data.email)
     if user:
         raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # 🔍 Phone check
+    phone_user = await auth_user.get_by_phone(db, data.phone_number)
+    if phone_user:
+        raise HTTPException(status_code=400, detail="Phone number already registered")
 
     new_user = await auth_user.create(db, data)
 

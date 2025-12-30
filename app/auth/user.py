@@ -25,6 +25,10 @@ class AuthUser:
     async def get_by_email(self, db: AsyncSession, email: str):
         result = await db.execute(select(User).where(User.email == email))
         return result.scalars().first()
+    
+    async def get_by_phone(self, db: AsyncSession, phone: str):
+        result = await db.execute(select(User).where(User.phone_number == phone))
+        return result.scalars().first()
 
     async def create(self, db, obj_in):
         otp = random.randint(100000, 999999)

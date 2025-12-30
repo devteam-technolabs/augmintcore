@@ -58,7 +58,8 @@ class PaymentService:
                     "quantity": 1,
                 }
             ],
-            success_url = "https://augmint.itechnolabs.tech/en/dashboard?payment=success",
+            # success_url = "https://augmint.itechnolabs.tech/en/dashboard?payment=success",
+            success_url = "https://augmint.itechnolabs.tech/en/payment-success?payment=success",
             cancel_url = "https://augmint.itechnolabs.tech/en/choose-your-plan?payment=failed",
             metadata = metadata
             
