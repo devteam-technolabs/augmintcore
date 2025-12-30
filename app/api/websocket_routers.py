@@ -139,47 +139,31 @@ async def crypto_socket(websocket: WebSocket):
 
                 product_id = ticker["product_id"]
                 price = float(ticker["price"])
-                change = float(ticker.get("change", 0))
 
                 if product_id not in price_cache:
-                    price_cache[product_id] = {
-                        "price": price,
-                        "change": change,
-                        "sparkline": [price]
-                    }
-                else:
-                    price_cache[product_id]["price"] = price
-                    price_cache[product_id]["change"] = change
-                    price_cache[product_id]["sparkline"].append(price)
+                    continue  # ignore non top-10 coins
 
-                    if len(price_cache[product_id]["sparkline"]) > sparkline_len:
-                        price_cache[product_id]["sparkline"].pop(0)
+                open_24h = float(ticker.get("open_24h", price))
+                change = (price - open_24h) / open_24h if open_24h else 0
 
-                top_ten_sorted = sorted(
-                    price_cache.items(),
-                    key=lambda x: x[1]["price"],
-                    reverse=True
-                )[:10]
-                # 🔹 ALWAYS update (do not block live updates)
-                last_top_ten = top_ten_sorted
+                # update cache
+                price_cache[product_id]["price"] = price
+                price_cache[product_id]["open_24h"] = open_24h
+                price_cache[product_id]["change"] = change
+                price_cache[product_id]["sparkline"].append(price)
 
-                formatted_top_ten = [
-                    {
-                        "id": pid.lower(),
-                        "symbol": pid,
-                        "name": f"{pid}/USD",
-                        "icon": f"https://coin-images.coingecko.com/coins/images/{i+1}/large/{pid.lower()}.png",
-                        "price": data["price"],
-                        "change": data["change"],
-                        "sparkline": data["sparkline"]
-                    }
-                    for i, (pid, data) in enumerate(top_ten_sorted)
-                ]
+                if len(price_cache[product_id]["sparkline"]) > sparkline_len:
+                    price_cache[product_id]["sparkline"].pop(0)
 
+                # 🔹 SEND SINGLE COIN UPDATE (THIS IS WHAT YOU WANT)
                 await websocket.send_json({
                     "type": "Top Ten Coins",
-                    "channel": "TOP_TEN_COINS",
-                    "data": formatted_top_ten,
+                    "symbol": product_id,
+                    "product_id": product_id,
+                    "price": f"{price:.2f}",
+                    "open_24h": f"{open_24h:.2f}",
+                    "change": f"{change:.6f}",
+                    "time": datetime.now(timezone.utc).isoformat()
                 })
 
     except WebSocketDisconnect:
