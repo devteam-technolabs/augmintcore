@@ -97,7 +97,7 @@ async def get_crypt_currencies(exchange_name: str, user, db):
         secret = user_keys["api_secret"]
         passphrase = user_keys["passphrase"]
 
-        # ✅ Correct CCXT exchange
+        # ✅ CCXT Coinbase Exchange
         exchange = ccxt.coinbaseexchange({
             "apiKey": api_key,
             "secret": secret,
@@ -108,31 +108,48 @@ async def get_crypt_currencies(exchange_name: str, user, db):
         # ✅ Sandbox mode
         exchange.set_sandbox_mode(True)
 
-        # ✅ Load markets once
+        # ✅ Load markets
         await exchange.load_markets()
 
-        # ✅ Public endpoint – no auth risk
+        # 1️⃣ Fetch user balances (THIS decides which coins user owns)
+        balance = await exchange.fetch_balance()
+
+        # 2️⃣ Fetch tickers once
         tickers = await exchange.fetch_tickers()
 
         crypto_prices = []
 
-        for symbol, data in tickers.items():
-            if not symbol.endswith("/USD"):
+        # 3️⃣ Iterate ONLY owned coins
+        for currency, total_amount in balance["total"].items():
+
+            if not total_amount or total_amount <= 0:
                 continue
 
-            last_price = data.get("last")
-            if not last_price:
-                continue
+            asset_data = {
+                "symbol": currency,
+                "quantity": float(total_amount),
+                "price_usd": None,
+                "usd_value": None,
+            }
 
-            base = symbol.split("/")[0]
+            # USD case
+            if currency == "USD":
+                asset_data["price_usd"] = 1.0
+                asset_data["usd_value"] = float(total_amount)
 
-            crypto_prices.append({
-                "symbol": base,
-                "pair": symbol,
-                "price_usd": float(last_price),
-                "change_24h": data.get("percentage"),
-                "volume": data.get("baseVolume"),
-            })
+            # Crypto → USD
+            else:
+                pair = f"{currency}/USD"
+                ticker = tickers.get(pair)
+
+                if ticker and ticker.get("last"):
+                    price = float(ticker["last"])
+                    asset_data["price_usd"] = price
+                    asset_data["usd_value"] = price * float(total_amount)
+
+            # add only valid priced assets
+            if asset_data["usd_value"] is not None:
+                crypto_prices.append(asset_data)
 
         return crypto_prices
 
@@ -142,6 +159,8 @@ async def get_crypt_currencies(exchange_name: str, user, db):
     finally:
         if exchange:
             await exchange.close()
+
+
 
 async def user_portfolio_data(exchange_name: str, user, db):
     exchange = None
