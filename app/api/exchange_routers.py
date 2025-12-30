@@ -9,7 +9,7 @@ from app.schemas.user import UserResponse
 from app.models.user import User, UserExchange
 from app.services.auth_service import create_access_token, create_refresh_token
 from app.security.kms_service import kms_service
-from app.coinbase.exchange import validate_coinbase_api,get_crypt_currencies,user_portfolio_data,get_total_coin_value,get_total_account_value
+from app.coinbase.exchange import validate_coinbase_api,get_crypt_currencies,user_portfolio_data,get_total_coin_value,get_total_account_value,get_profit_and_loss
 
 router = APIRouter(prefix="/exchange", tags=["Exchange"])
 
@@ -209,3 +209,16 @@ async def total_account_value(
 
 
 
+
+
+@router.get("/portfolio/profit-loss")
+async def portfolio_profit_loss(
+    exchange_name: str,
+    current_user: User = Security(auth_user.get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    return await get_profit_and_loss(
+        exchange_name=exchange_name.lower(),
+        user=current_user,
+        db=db
+    )

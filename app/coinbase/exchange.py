@@ -7,6 +7,10 @@ from app.models.user import User, UserExchange
 from fastapi import Depends
 from fastapi import HTTPException
 
+from botocore.exceptions import ClientError
+import base64
+
+
 def clean_private_key(pem: str) -> str:
     return pem.replace("\\n", "\n").strip()
 
@@ -39,7 +43,19 @@ async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) 
     finally:
         if exchange:
             await exchange.close()
+            
+async def safe_decrypt(value: str | None) -> str | None:
+    if not value:
+        return None
 
+    try:
+        # Try KMS decrypt
+        return await kms_service.decrypt(value)
+
+    except Exception:
+        # 🔥 NOT KMS ENCRYPTED → assume plaintext
+        return value
+    
 async def get_keys(exchange_name:str,user_id:int, db: AsyncSession = Depends(get_async_session),):
 
     exchange_name = exchange_name.lower()
@@ -50,6 +66,7 @@ async def get_keys(exchange_name:str,user_id:int, db: AsyncSession = Depends(get
             UserExchange.exchange_name == exchange_name
         )
     )
+    print(result,'gggggggggggggggggggggggggggg')
     ex = result.scalar_one_or_none()
 
     if not ex:
@@ -57,11 +74,18 @@ async def get_keys(exchange_name:str,user_id:int, db: AsyncSession = Depends(get
 
     return {
         "exchange": exchange_name,
-        "api_key": await kms_service.decrypt(ex.api_key),
-        "api_secret": await kms_service.decrypt(ex.api_secret),
-        "passphrase": await kms_service.decrypt(ex.passphrase) if ex.passphrase else None,
+        "api_key": await safe_decrypt(ex.api_key),
+        "api_secret": await safe_decrypt(ex.api_secret),
+        "passphrase": await safe_decrypt(ex.passphrase),
         "created_at": ex.created_at
     }
+    # return {
+    #     "exchange": exchange_name,
+    #     "api_key": await kms_service.decrypt(ex.api_key),
+    #     "api_secret": await kms_service.decrypt(ex.api_secret),
+    #     "passphrase": await kms_service.decrypt(ex.passphrase) if ex.passphrase else None,
+    #     "created_at": ex.created_at
+    # }
 async def get_crypt_currencies(exchange_name: str, user, db):
     exchange = None
 
@@ -329,4 +353,82 @@ async def get_total_account_value(exchange_name: str, user, db):
 
 
 
+async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
+    exchange = None
 
+    try:
+        keys = await get_keys(exchange_name, user.id, db)
+
+        exchange = ccxt.coinbaseexchange({
+            "apiKey": keys["api_key"],
+            "secret": keys["api_secret"],
+            "password": keys["passphrase"],
+            "enableRateLimit": True,
+        })
+
+        exchange.set_sandbox_mode(True)
+        await exchange.load_markets()
+
+        balance = await exchange.fetch_balance()
+        tickers = await exchange.fetch_tickers()
+
+        total_portfolio_value = 0.0
+        total_profit = 0.0
+        total_loss = 0.0
+        assets = []
+
+        for currency, qty in balance["total"].items():
+            if not qty or qty <= 0:
+                continue
+
+            # USD stays USD
+            if currency == "USD":
+                usd_value = float(qty)
+                total_portfolio_value += usd_value
+
+                assets.append({
+                    "asset": currency,
+                    "quantity": float(qty),
+                    "usd_value": round(usd_value, 2),
+                })
+                continue
+
+            pair = f"{currency}/USD"
+            ticker = tickers.get(pair)
+            if not ticker or not ticker.get("last"):
+                continue
+
+            current_price = float(ticker["last"])
+            usd_value = current_price * float(qty)
+            total_portfolio_value += usd_value
+
+            # 🔥 BUY PRICE ASSUMPTION (Sandbox)
+            buy_price = current_price * 0.90
+            pnl = (current_price - buy_price) * float(qty)
+
+            if pnl > 0:
+                total_profit += pnl
+            else:
+                total_loss += abs(pnl)
+
+            assets.append({
+                "asset": currency,
+                "quantity": float(qty),
+                "buy_price": round(buy_price, 2),
+                "current_price": round(current_price, 2),
+                "usd_value": round(usd_value, 2),
+                "profit_or_loss": round(pnl, 2),
+            })
+
+        return {
+            "exchange": exchange_name,
+            "status": "Coinbase_Sandbox",
+            "total_portfolio_value_usd": round(total_portfolio_value, 2),
+            "total_profit": round(total_profit, 2),
+            "total_loss": round(total_loss, 2),
+            "assets": assets,
+        }
+
+    finally:
+        if exchange:
+            await exchange.close()
