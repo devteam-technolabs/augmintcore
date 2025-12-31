@@ -37,13 +37,15 @@ async def fetch_candles(symbol: str, granularity: int = 3600):
     }
 
 
+# this is new upadted code for new requirement/
 
-# # app/services/candles.py
+
 # import httpx
+# import logging
 # from app.core.config import get_settings
 
 # settings = get_settings()
-
+# logger = logging.getLogger(__name__)
 
 # async def fetch_candles(symbol: str, granularity: int = 3600):
 #     product_id = f"{symbol.upper()}-USD"
@@ -53,24 +55,26 @@ async def fetch_candles(symbol: str, granularity: int = 3600):
 #         + settings.COINBASE_CANDLES_PATH.format(product_id=product_id)
 #     )
 
-#     async with httpx.AsyncClient(timeout=10) as client:
-#         res = await client.get(url, params={"granularity": granularity})
-#         res.raise_for_status()
-
-#     candles = res.json()
-
-#     return {
-#         "symbol": product_id,
-#         "granularity": granularity,
-#         "data": [
-#             {
-#                 "time": c[0],
-#                 "low": c[1],
-#                 "high": c[2],
-#                 "open": c[3],
-#                 "close": c[4],
-#                 "volume": c[5],
-#             }
-#             for c in candles
-#         ]
-#     }
+#     try:
+#         async with httpx.AsyncClient(timeout=10) as client:
+#             res = await client.get(url, params={"granularity": granularity})
+#             res.raise_for_status()
+#             candles = res.json()
+            
+#             if not candles:
+#                 return []
+                
+#             return [
+#                 {
+#                     "time": c[0],
+#                     "low": c[1],
+#                     "high": c[2],
+#                     "open": c[3],
+#                     "close": c[4],
+#                     "volume": c[5],
+#                 }
+#                 for c in candles
+#             ]
+#     except Exception as e:
+#         logger.error(f"Error fetching candles for {symbol}: {e}")
+#         return []
