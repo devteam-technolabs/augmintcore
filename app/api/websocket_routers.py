@@ -314,11 +314,11 @@ async def crypto_socket_v2(websocket: WebSocket):
                     if not state["sparkline_sent"] and state["historical_candles"]:
                         payload["price_chart"]["sparkline"] = [
                             {"time": c["time"], "price": f"{float(c['close']) * state['anchor']:.2f}"} 
-                            for c in state["historical_candles"][:100]
+                            for c in state["historical_candles"][:500]
                         ]
                         payload["portfolio_volatility_chart"]["sparkline"] = [
                             {"time": c["time"], "val": f"{float(c['close']) * state['anchor']:.2f}"} 
-                            for c in state["historical_candles"][:50]
+                            for c in state["historical_candles"][:500]
                         ]
                         state["sparkline_sent"] = True
 
