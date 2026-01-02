@@ -313,6 +313,18 @@ async def crypto_socket_v2(websocket: WebSocket):
                         else 0
                     )
 
+                    latest_candle = (
+                        state["historical_candles"][0]
+                        if state["historical_candles"]
+                        else None
+                    )
+
+                    latest_volume = (
+                        float(latest_candle["volume"]) * state["anchor"]
+                        if latest_candle
+                        else 0
+                    )
+
                     payload = {
                         "type": "dashboard_data",
                         "symbol": state["product_id"],
@@ -322,11 +334,17 @@ async def crypto_socket_v2(websocket: WebSocket):
                             "price": f"{live_price:.2f}",
                             "high": f"{float(details.get('high_24h', 0)):.2f}",
                             "low": f"{float(details.get('low_24h', 0)):.2f}",
-                            "volume": f"{vol_24h:.2f}",
+                            # "volume": f"{float(c['volume']) * state['anchor']:.2f}",
+                            # "volume": f"{live_price:.2f}",
+                            # "volume_price": f"{change_24h:.4f}",
+                            "volume": f"{latest_volume:.2f}", 
+                            # "volume": f"{float(c['volume']) * state['anchor']:.2f}",
+                            # "volume": f"{candle_volume:.2f}",
                             "time_iso": datetime.now(timezone.utc).isoformat(),
                         },
                         "portfolio_volatility_chart": {
                             "volatility": f"{state['volatility']:.2f}",
+                            "price": f"{live_price:.2f}",
                             "time_iso": datetime.now(timezone.utc).isoformat(),
                         },
                         "stats": {
@@ -345,6 +363,8 @@ async def crypto_socket_v2(websocket: WebSocket):
                             {
                                 "time": c["time"],
                                 "price": f"{float(c['close']) * state['anchor']:.2f}",
+                                "volume": f"{float(c['volume']) * state['anchor']:.2f}",
+                                "time_iso": datetime.now(timezone.utc).isoformat(),
                             }
                             for c in candles
                         ]
@@ -353,6 +373,8 @@ async def crypto_socket_v2(websocket: WebSocket):
                             {
                                 "time": c["time"],
                                 "val": f"{float(c['close']) * state['anchor']:.2f}",
+                                "price": f"{float(c['close']) * state['anchor']:.2f}",
+                                "time_iso": datetime.now(timezone.utc).isoformat(),
                             }
                             for c in candles
                         ]
