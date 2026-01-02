@@ -221,71 +221,97 @@ async def crypto_socket(websocket: WebSocket):
 @router.websocket("/ws/crypto/v2/")
 async def crypto_socket_v2(websocket: WebSocket):
     await websocket.accept()
-    
+
     symbol_param = websocket.query_params.get("symbol")
     timeframe_param = websocket.query_params.get("timeframe", "1S")
-    ticker_queue = asyncio.Queue()
+
+    ticker_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+    tasks: list[asyncio.Task] = []
 
     try:
-        # 🟢 DASHBOARD MODE: Hybrid (Coinbase Live + CMC Stats)
+        # ==========================
+        # 🟢 DASHBOARD MODE
+        # ==========================
         if symbol_param:
             state = {
                 "symbol": symbol_param.upper(),
                 "product_id": f"{symbol_param.upper()}-USD",
                 "timeframe": timeframe_param,
                 "granularity": TIMEFRAME_MAP.get(timeframe_param, 60),
-                "details": None, # CMC Details
+                "details": None,
                 "historical_candles": [],
-                "volatility": 0,
+                "volatility": 0.0,
                 "anchor": 1.0,
                 "active": True,
-                "sparkline_sent": False
+                "sparkline_sent": False,
             }
 
+            # 🔁 SINGLE Coinbase WS Listener (IMPORTANT FIX)
+            coinbase_task = asyncio.create_task(
+                coinbase_ws_listener([state["product_id"]], ticker_queue)
+            )
+            tasks.append(coinbase_task)
+
             async def sync_market_data():
-                """Refreshes CMC stats and Coinbase history."""
+                """Low-frequency REST sync (every 5s)"""
                 while state["active"]:
                     try:
-                        # 1. Fetch High-Accuracy Stats from CMC
                         details = await fetch_cmc_details(state["symbol"])
                         if details:
                             state["details"] = details
-                        
-                        # 2. Fetch History from Coinbase (Using v2 for list)
-                        candles = await fetch_candles_v2(state["symbol"], state["granularity"])
+
+                        candles = await fetch_candles_v2(
+                            state["symbol"], state["granularity"]
+                        )
                         if candles:
                             state["historical_candles"] = candles
                             state["volatility"] = calculate_volatility(candles)
-                            
-                            # 3. Price Anchoring: Align Coinbase to CMC price level
+
                             if details:
-                                cmc_p = float(details["price"])
-                                cb_p = float(candles[0]["close"])
-                                state["anchor"] = cmc_p / cb_p
-                                
+                                cb_price = float(candles[0]["close"])
+                                cmc_price = float(details["price"])
+                                if cb_price > 0:
+                                    state["anchor"] = cmc_price / cb_price
+
                     except Exception as e:
                         logger.error(f"Market sync error: {e}")
+
                     await asyncio.sleep(5)
 
             async def stream_dashboard_updates():
-                """Broadcasts real-time updates anchored to CMC values."""
+                """High-frequency WS stream"""
                 while state["active"]:
                     ticker = await ticker_queue.get()
-                    if ticker["product_id"] != state["product_id"]:
+
+                    if ticker.get("product_id") != state["product_id"]:
                         continue
-                        
+
                     details = state["details"]
                     if not details:
                         continue
 
-                    # Anchored Price (Live Ticker * CMC Offset)
                     live_price = float(ticker["price"]) * state["anchor"]
-                    
-                    # Dashboard Metrics from CMC
-                    vol_24h = details.get("volume_24h", 0)
-                    ratio_pct = (details.get("vol_mkt_cap_ratio") or 0) * 100
-                    open_24h = float(details.get('price', 0)) / (1 + details.get('price_change_24h', 0)/100) if details.get('price_change_24h') is not None else 0
-                    change_24h = ((live_price - open_24h) / open_24h) * 100 if open_24h else 0
+
+                    vol_24h = float(details.get("volume_24h", 0))
+                    market_cap = float(details.get("market_cap", 0))
+                    fdv = float(details.get("fdv", 0))
+
+                    vol_mkt_cap_ratio = (
+                        (vol_24h / market_cap) * 100 if market_cap else 0
+                    )
+
+                    open_24h = (
+                        float(details["price"])
+                        / (1 + details.get("price_change_24h", 0) / 100)
+                        if details.get("price_change_24h") is not None
+                        else live_price
+                    )
+
+                    change_24h = (
+                        ((live_price - open_24h) / open_24h) * 100
+                        if open_24h
+                        else 0
+                    )
 
                     payload = {
                         "type": "dashboard_data",
@@ -305,77 +331,109 @@ async def crypto_socket_v2(websocket: WebSocket):
                         },
                         "stats": {
                             "Volume (24h)": format_currency_short(vol_24h),
-                            "vol_mkt_cap_ratio": f"{ratio_pct:.2f}%",
-                            "fdv": format_currency_short(details.get("fdv")),
-                            "market_cap": format_currency_short(details.get("market_cap")),
-                        }
+                            "vol_mkt_cap_ratio": f"{vol_mkt_cap_ratio:.2f}%",
+                            "fdv": format_currency_short(fdv),
+                            "market_cap": format_currency_short(market_cap),
+                        },
                     }
 
+                    # 🟡 SEND SPARKLINE ONCE (500 POINTS)
                     if not state["sparkline_sent"] and state["historical_candles"]:
+                        candles = state["historical_candles"][:500]
+
                         payload["price_chart"]["sparkline"] = [
-                            {"time": c["time"], "price": f"{float(c['close']) * state['anchor']:.2f}"} 
-                            for c in state["historical_candles"][:500]
+                            {
+                                "time": c["time"],
+                                "price": f"{float(c['close']) * state['anchor']:.2f}",
+                            }
+                            for c in candles
                         ]
+
                         payload["portfolio_volatility_chart"]["sparkline"] = [
-                            {"time": c["time"], "val": f"{float(c['close']) * state['anchor']:.2f}"} 
-                            for c in state["historical_candles"][:500]
+                            {
+                                "time": c["time"],
+                                "val": f"{float(c['close']) * state['anchor']:.2f}",
+                            }
+                            for c in candles
                         ]
+
                         state["sparkline_sent"] = True
 
                     await websocket.send_json(payload)
 
             async def handle_commands():
-                """Handles interaction like symbol/timeframe changes."""
-                try:
-                    while state["active"]:
-                        msg = await websocket.receive_json()
-                        action = msg.get("action")
-                        if action == "CHANGE_SYMBOL":
-                            new_s = msg.get("symbol", "BTC").upper()
-                            if new_s != state["symbol"]:
-                                state["symbol"] = new_s
-                                state["product_id"] = f"{new_s}-USD"
-                                state["sparkline_sent"] = False
-                                asyncio.create_task(coinbase_ws_listener([state["product_id"]], ticker_queue))
-                        elif action == "CHANGE_TIMEFRAME":
-                            tf = msg.get("timeframe")
-                            if tf in TIMEFRAME_MAP:
-                                state["timeframe"] = tf
-                                state["granularity"] = TIMEFRAME_MAP[tf]
-                                state["sparkline_sent"] = False
-                except WebSocketDisconnect:
-                    state["active"] = False
-                    raise
+                """Client commands (symbol/timeframe change)"""
+                while state["active"]:
+                    msg = await websocket.receive_json()
+                    action = msg.get("action")
 
-            asyncio.create_task(coinbase_ws_listener([state["product_id"]], ticker_queue))
-            await asyncio.gather(sync_market_data(), stream_dashboard_updates(), handle_commands())
+                    if action == "CHANGE_SYMBOL":
+                        new_symbol = msg.get("symbol", "BTC").upper()
+                        if new_symbol != state["symbol"]:
+                            state.update({
+                                "symbol": new_symbol,
+                                "product_id": f"{new_symbol}-USD",
+                                "sparkline_sent": False,
+                            })
 
-        # 🔵 TOP TEN MODE: CMC Global Rankings
+                    elif action == "CHANGE_TIMEFRAME":
+                        tf = msg.get("timeframe")
+                        if tf in TIMEFRAME_MAP:
+                            state["timeframe"] = tf
+                            state["granularity"] = TIMEFRAME_MAP[tf]
+                            state["sparkline_sent"] = False
+
+            tasks.extend([
+                asyncio.create_task(sync_market_data()),
+                asyncio.create_task(stream_dashboard_updates()),
+                asyncio.create_task(handle_commands()),
+            ])
+
+            await asyncio.gather(*tasks)
+
+        # ==========================
+        # 🔵 TOP TEN MODE
+        # ==========================
         else:
             top_ten = await fetch_top_ten_cmc()
             product_ids = [coin["product_id"] for coin in top_ten]
-            await websocket.send_json({"type": "Top Ten Coins", "data": top_ten})
-            
-            asyncio.create_task(coinbase_ws_listener(product_ids, ticker_queue))
+
+            await websocket.send_json({
+                "type": "Top Ten Coins",
+                "data": top_ten
+            })
+
+            coinbase_task = asyncio.create_task(
+                coinbase_ws_listener(product_ids, ticker_queue)
+            )
+            tasks.append(coinbase_task)
+
             while True:
                 ticker = await ticker_queue.get()
-                pid, price = ticker["product_id"], float(ticker["price"])
+                pid = ticker["product_id"]
+                price = float(ticker["price"])
                 open_24h = float(ticker.get("open_24h", price))
                 change = (price - open_24h) / open_24h if open_24h else 0
-                
+
                 await websocket.send_json({
                     "type": "Top Ten Update",
-                    "symbol": pid.split('-')[0],
+                    "symbol": pid.split("-")[0],
                     "product_id": pid,
                     "price": f"{price:.2f}",
                     "change": f"{change:.4f}",
-                    "time": datetime.now(timezone.utc).isoformat()
+                    "time": datetime.now(timezone.utc).isoformat(),
                 })
 
     except WebSocketDisconnect:
-        logger.info("Client disconnected.")
+        logger.info("WebSocket disconnected")
+
     except Exception as e:
-        logger.error(f"WebSocket Error: {e}")
+        logger.error(f"WebSocket error: {e}")
+
     finally:
-        try: await websocket.close()
-        except: pass
+        for task in tasks:
+            task.cancel()
+        try:
+            await websocket.close()
+        except:
+            pass
