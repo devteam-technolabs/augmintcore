@@ -1,17 +1,17 @@
-"""add the mfa key
+"""add deafult vallue in a cancel at priod end field 
 
-Revision ID: af38c81c6055
-Revises: daf90dad3260
-Create Date: 2025-11-15 13:35:38.394859
+Revision ID: 55fbb5933430
+Revises: 5565a553f0bc
+Create Date: 2025-12-08 13:49:50.090796
 
 """
-
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
+
 
 # revision identifiers, used by Alembic.
-revision = "af38c81c6055"
-down_revision = "daf90dad3260"
+revision = '55fbb5933430'
+down_revision = '5565a553f0bc'
 branch_labels = None
 depends_on = None
 

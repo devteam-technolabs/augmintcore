@@ -1,17 +1,17 @@
-"""add the mfa key
+"""add nullable true in exchange field
 
-Revision ID: af38c81c6055
-Revises: daf90dad3260
-Create Date: 2025-11-15 13:35:38.394859
+Revision ID: 5565a553f0bc
+Revises: 317834876a72
+Create Date: 2025-12-05 11:16:31.648329
 
 """
-
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
+
 
 # revision identifiers, used by Alembic.
-revision = "af38c81c6055"
-down_revision = "daf90dad3260"
+revision = '5565a553f0bc'
+down_revision = '317834876a72'
 branch_labels = None
 depends_on = None
 

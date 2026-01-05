@@ -1,17 +1,17 @@
-"""add the mfa key
+"""add the field step in user table
 
-Revision ID: af38c81c6055
-Revises: daf90dad3260
-Create Date: 2025-11-15 13:35:38.394859
+Revision ID: a27c71be74a5
+Revises: f0f74dc4104d
+Create Date: 2025-11-25 10:23:30.646332
 
 """
-
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
+
 
 # revision identifiers, used by Alembic.
-revision = "af38c81c6055"
-down_revision = "daf90dad3260"
+revision = 'a27c71be74a5'
+down_revision = 'f0f74dc4104d'
 branch_labels = None
 depends_on = None
 

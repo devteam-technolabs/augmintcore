@@ -107,7 +107,6 @@ celerybeat.pid
 site/
 docs/_build/
 *.pdf
-*.html
 
 # --- Compiled C extensions ---
 *.so

@@ -1,8 +1,10 @@
 import smtplib
 from email.mime.text import MIMEText
+
 from app.core.config import get_settings
 
 settings = get_settings()
+
 
 def send_email_otp(to_email: str, otp: int):
     msg = MIMEText(f"Your AugmintCore verification code is: {otp}")

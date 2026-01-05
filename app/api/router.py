@@ -1,28 +1,42 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-import pyotp
-from app.db.session import get_async_session
-from app.schemas.user import (
-    UserCreate, MessageUserResponse, 
-    VerifyOtpRequest,
-    UserWithAddressResponse, 
-    AddressCreate, 
-    MFAResetResponse, 
-    MFAEnableResponse, 
-    MFAVerifyResponse,
-    UserResponse,
-    LoginResponse)
-from app.crud.user import crud_user
-from app.services.email_service import send_verification_email
-from app.models.user import User
-from sqlalchemy.future import select
-from app.services.mfa_service import generate_mfa_secret, generate_totp_uri, generate_qr_code
-from app.services.auth_service import create_access_token, create_refresh_token
 from datetime import timedelta
+import random
+from datetime import datetime, timedelta
+from passlib.context import CryptContext
+import re
+import pyotp
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from app.services.payment_service import payment_service
 from app.core.config import get_settings
+from app.auth.user import auth_user
+from app.db.session import get_async_session
+from app.models.user import User
+from app.schemas.user import (
+    AddressCreate,
+    LoginResponse,
+    MessageUserResponse,
+    MFAEnableResponse,
+    MFAResetResponse,
+    MFAVerifyResponse,
+    UserCreate,
+    UserResponse,
+    UserWithAddressResponse,
+    VerifyOtpRequest,
+    ForgotPasswordRequest,VerifyResetOTPRequest,
+    ResetPasswordRequest
+)
+from app.services.auth_service import create_access_token, create_refresh_token,verify_passwword
+from app.services.email_service import send_verification_email
+from app.services.mfa_service import (
+    generate_mfa_secret,
+    generate_qr_code,
+    generate_totp_uri,
+)
+from app.utils.hashing import hash_password
+
 settings = get_settings()
 from jose import jwt
-
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -34,21 +48,33 @@ router = APIRouter(prefix="/users", tags=["Users"])
 async def signup(
     data: UserCreate,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
 ):
-    user = await crud_user.get_by_email(db, data.email)
+    user = await auth_user.get_by_email(db, data.email)
     if user:
         raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # 🔍 Phone check
+    phone_user = await auth_user.get_by_phone(db, data.phone_number)
+    if phone_user:
+        raise HTTPException(status_code=400, detail="Phone number already registered")
 
-    new_user = await crud_user.create(db, data)
+    new_user = await auth_user.create(db, data)
+
+    first_name = new_user.full_name.split(" ")[0] if new_user.full_name else "User"
 
     background_tasks.add_task(
-        send_verification_email, new_user.email, new_user.email_otp
+        send_verification_email,
+        new_user.email,
+        new_user.email_otp,
+        first_name,
+        title="Your OTP for Augmint"
     )
 
     return {
         "message": "User created successfully. Please check your email to verify your account.",
-        "user": new_user
+        "user": new_user,
+        "status_code":201
     }
 
 
@@ -59,18 +85,18 @@ async def signup(
 async def resend_otp(
     email: str,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
 ):
-    user = await crud_user.resend_otp(db, email)
+    user = await auth_user.resend_otp(db, email)
 
-    background_tasks.add_task(
-        send_verification_email, user.email, user.email_otp
-    )
+    first_name = user.full_name.split(" ")[0] if user.full_name else "User"
+  
+    
 
-    return {
-        "message": "A new OTP has been sent to your email.",
-        "user": user
-    }
+    background_tasks.add_task(send_verification_email, user.email, user.email_otp, first_name,
+        title="Your Resend OTP for Augmint")
+
+    return {"message": "A new OTP has been sent to your email.", "user": user,"status_code":200}
 
 
 # -------------------------------
@@ -78,20 +104,20 @@ async def resend_otp(
 # -------------------------------
 @router.post("/verify-otp", response_model=MessageUserResponse)
 async def verify_otp(
-    data: VerifyOtpRequest,
-    db: AsyncSession = Depends(get_async_session)
+    data: VerifyOtpRequest, db: AsyncSession = Depends(get_async_session)
 ):
-    user = await crud_user.verify_email(db, data.email, data.otp)
+    user = await auth_user.verify_email(db, data.email, data.otp)
 
-    access = create_access_token({'user_id': user.id})
-    refresh = create_refresh_token({'user_id': user.id})
+    access = create_access_token({"user_id": user.id})
+    refresh = create_refresh_token({"user_id": user.id})
 
     return {
         "message": "Email verified successfully!",
         "user": user,
         "access_token": access,
         "refresh_token": refresh,
-        "token_type" : "bearer"
+        "token_type": "bearer",
+        "status_code":200
     }
 
 
@@ -99,23 +125,32 @@ async def verify_otp(
 async def create_address(
     data: AddressCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user = Depends(crud_user.get_current_user)
+    current_user=Security(auth_user.get_current_user),
 ):
     user = current_user
+    result =await db.execute(select(User).where(User.id == user.id))
+    user = result.scalar_one_or_none()
 
     # 2. Create new address
-    address = await crud_user.create_address(db, data, user.id)
+    address = await auth_user.create_address(db, data, user.id)
 
     # 3. Attach to user
     user.address = address
+    user.is_address_filled = True
+    if user.is_address_filled == True:
+        user.step=2
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
 
-    return {
-        "message": "Address created successfully",
-        "user": user
-    }
+    return {"message": "Address created successfully", "user": user,"status_code":201}
 
-@router.post("/enable-mfa",response_model=MFAEnableResponse)
-async def enable_mfa(db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+
+@router.post("/enable-mfa", response_model=MFAEnableResponse)
+async def enable_mfa(
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(auth_user.get_current_user),
+):
     user = current_user
     user_id = user.id
     # Query user (ASYNC)
@@ -128,7 +163,7 @@ async def enable_mfa(db: AsyncSession = Depends(get_async_session), current_user
     # Generate secret
     secret = generate_mfa_secret()
     user.mfa_secret = secret
-    user.is_mfa_enabled = True
+    user.is_mfa_enabled = False
 
     # Save to DB
     await db.commit()
@@ -142,11 +177,17 @@ async def enable_mfa(db: AsyncSession = Depends(get_async_session), current_user
         "message": "MFA enabled",
         "secret": secret,
         "qr_code_base64": f"data:image/png;base64,{qr_code}",
-        "user": user
+        "user": user,
+        "status_code":200
     }
 
+
 @router.post("/verify-mfa", response_model=MFAVerifyResponse)
-async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+async def verify_mfa(
+    otp: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(auth_user.get_current_user),
+):
     user = current_user
     user_id = user.id
     # Fetch user
@@ -169,7 +210,8 @@ async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), cu
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
-            "user": user
+            "user": user,
+            "status_code":200
         }
 
     totp = pyotp.TOTP(user.mfa_secret)
@@ -179,14 +221,15 @@ async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), cu
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
     # Mark MFA as verified
-    user.is_mfa_verified = True
+    user.is_mfa_enabled = True
+    user.step =4
     await db.commit()
     await db.refresh(user)
 
     # Generate tokens
     access_token = create_access_token(
         {"sub": str(user.id)},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
     )
 
     refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -196,13 +239,17 @@ async def verify_mfa(otp: str, db: AsyncSession = Depends(get_async_session), cu
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "user": user
+        "user": user,
+        "status_code":200
     }
 
 
-
-@router.post("/disable-mfa",response_model=MFAVerifyResponse)
-async def disable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session),current_user = Depends(crud_user.get_current_user)):
+@router.post("/disable-mfa", response_model=MFAVerifyResponse)
+async def disable_mfa(
+    user_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(auth_user.get_current_user),
+):
     user = current_user
     user_id = user.id
     # Fetch user
@@ -223,12 +270,15 @@ async def disable_mfa(user_id: int, db: AsyncSession = Depends(get_async_session
     await db.commit()
     await db.refresh(user)
 
-    return {"message": "MFA disabled successfully",
-            "user": user}
+    return {"message": "MFA disabled successfully", "user": user,"status_code":200}
 
 
-@router.post("/reset-mfa",response_model=MFAResetResponse)
-async def reset_mfa(user_id: int, db: AsyncSession = Depends(get_async_session), current_user = Depends(crud_user.get_current_user)):
+@router.post("/reset-mfa", response_model=MFAResetResponse)
+async def reset_mfa(
+    user_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(auth_user.get_current_user),
+):
     user = current_user
     user_id = user.id
     # Fetch user
@@ -256,12 +306,15 @@ async def reset_mfa(user_id: int, db: AsyncSession = Depends(get_async_session),
         "message": "MFA reset successful. Scan the new QR code.",
         "new_secret": new_secret,
         "qr_code_base64": f"data:image/png;base64,{qr_code}",
-        "user": user
+        "user": user,
+        "status_code":200
     }
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(email: str, password: str, db: AsyncSession = Depends(get_async_session)):
+async def login(
+    email: str, password: str, db: AsyncSession = Depends(get_async_session)
+):
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -270,6 +323,7 @@ async def login(email: str, password: str, db: AsyncSession = Depends(get_async_
 
     if not user.verify_password(password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
+    print("stripe_id ",user.stripe_customer_id)
 
     # CASE 1: MFA Enabled → Do NOT issue tokens yet
     # if user.is_mfa_enabled:
@@ -289,22 +343,21 @@ async def login(email: str, password: str, db: AsyncSession = Depends(get_async_
         user=UserResponse.model_validate(user),
         access_token=access,
         refresh_token=refresh,
-        token_type="bearer"
+        token_type="bearer",
+        status_code=200
     )
-
 
 
 @router.post("/refresh-token")
 async def refresh_token(refresh_token: str):
     try:
-        payload = jwt.decode(refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(
+            refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
         user_id = payload.get("user_id")
 
         new_access = create_access_token({"user_id": user_id})
-        return {
-            "access_token": new_access,
-            "token_type": "bearer"
-        }
+        return {"access_token": new_access, "token_type": "bearer"}
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
@@ -312,21 +365,82 @@ async def refresh_token(refresh_token: str):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 
-# @router.post("/forgot-password")
-# async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_async_session)):
-#     result = await db.execute(select(User).where(User.email == data.email))
-#     user = result.scalar_one_or_none()
+@router.post("/forgot-password",response_model= MessageUserResponse)
+async def forgot_password(data: ForgotPasswordRequest,background_tasks:BackgroundTasks
+, db: AsyncSession = Depends(get_async_session)):
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
 
-#     if not user:
-#         raise HTTPException(status_code=404, detail="User not found")
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-#     otp = generate_reset_otp()
-#     user.reset_password_otp = otp
-#     user.reset_otp_created_at = datetime.utcnow()
+    otp = random.randint(100000, 999999)
+    user.email_otp = otp
+    user.email_otp_expiry = datetime.utcnow() + timedelta(minutes=5)
+    print("step",user.step)
+    db.add(user)
 
-#     await db.commit()
+    await db.commit()
+    await db.refresh(user)
+    first_name = user.full_name.split(" ")[0] if user.full_name else "User"
+    background_tasks.add_task(send_verification_email, user.email, user.email_otp, first_name,
+        title="Your Reset OTP for Augmint")
 
-#     # TODO: send otp via email or sms
-#     print("Reset OTP:", otp)
+    # TODO: send otp via email or sms
+    print("Reset OTP:", otp)
 
-#     return {"message": "Reset OTP sent to registered email"}
+    return {"message": "Reset OTP sent to registered email","user":user,"status_code":200}
+
+
+@router.post("/forgot_password_verify",response_model= MessageUserResponse)
+async def forgot_password_verify(data:VerifyOtpRequest,db:AsyncSession =Depends(get_async_session)):
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.email_otp != data.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    if user.email_otp_expiry < user.email_otp_expiry:
+        raise HTTPException(status_code=400, detail="OTP expired")
+
+    user.email_otp = None
+    user.email_otp_expiry = None
+    db.add(user)
+
+    await db.commit()
+    await db.refresh(user)
+
+    return {"message": "OTP verified successfully","user":user,"status_code":200}
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+@router.post("/reset_password",response_model= MessageUserResponse)
+async def reset_password(data:ResetPasswordRequest,db:AsyncSession =Depends(get_async_session)):
+    results = await db.execute(select(User).where(User.email==data.email))
+    user = results.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if data.new_password!=data.confirm_password:
+        raise HTTPException(status_code=400,detail="Passwords do not match.")
+    
+
+    if pwd_context.verify(data.new_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="New password must be different from old password")
+    try:
+        verify_passwword(data.confirm_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    user.hashed_password= hash_password(data.confirm_password)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return {"message": "Password reset successfully","user":user,"status_code":200}
+
+@router.post("/logout")
+async def logout():
+    return {"message": "Logged out successfully"}
+

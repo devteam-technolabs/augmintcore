@@ -2,28 +2,36 @@
 # FastAPI entrypoint (create_app function)
 # Go simple, but think grandly.
 
+import inspect
+import logging
+import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine
+from fastapi import FastAPI, HTTPException
+from starlette.authentication import AuthenticationError
+from app.core.exception_handlers import (
+    custom_http_exception_handler,
+    auth_middleware_exception_handler,
+)
 
+from app.api.router import router as api_router
+from app.api.payment_routes import router as payment_router
+from app.api.exchange_routers import router as exchange_routers
 from app.core import events
 from app.core.config import get_settings
 from app.db.session import engine
 
-import time
-import logging
-import inspect
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
-from app.api.router import router as api_router
-
-
-
+from app.api.websocket_routers import router as websocket_router 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="augmint_core", debug=settings.DEBUG)
+    # app = FastAPI(title="Crypto WebSocket Backend")
 
     # CORS
     origins = settings.CORS_ORIGINS or []
@@ -34,9 +42,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         allow_credentials=True,
     )
+    # Override FastAPI HTTPException handler
+    app.add_exception_handler(HTTPException, custom_http_exception_handler)
 
+    # Override Authentication middleware handler
+    app.add_exception_handler(AuthenticationError, auth_middleware_exception_handler)
     # include API router
     app.include_router(api_router, prefix="/api")
+    app.include_router(payment_router,prefix="/api")
+    app.include_router(exchange_routers,prefix="/api")
+    app.include_router(websocket_router,prefix="/api")
 
     # Startup and shutdown events
     async def _on_startup() -> None:
