@@ -10,7 +10,6 @@ from fastapi import HTTPException
 from botocore.exceptions import ClientError
 import base64
 
-
 def clean_private_key(pem: str) -> str:
     return pem.replace("\\n", "\n").strip()
 

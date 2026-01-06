@@ -10,9 +10,9 @@ from app.models.user import User, UserExchange
 from app.services.auth_service import create_access_token, create_refresh_token
 from app.security.kms_service import kms_service
 from app.coinbase.exchange import validate_coinbase_api,get_crypt_currencies,user_portfolio_data,get_total_coin_value,get_total_account_value,get_profit_and_loss
+from app.services.secret_manager_service import secrets_manager_service
 
 router = APIRouter(prefix="/exchange", tags=["Exchange"])
-
 
 @router.post("/coinbase/connect", response_model=ExchangeConnectResponse)
 async def connect_exchange(
@@ -20,72 +20,98 @@ async def connect_exchange(
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Security(auth_user.get_current_user),
 ):
-
     # 1. Check user
+    print("DATA ===>", data)
+    print("1")
     result = await db.execute(select(User).where(User.id == current_user.id))
+    print("2")
     user = result.scalar_one_or_none()
+    print("3")
     if not user:
         raise HTTPException(404, "User not found")
-    
+    print("4")
     access = create_access_token({"user_id": user.id})
+    print("5")
     refresh = create_refresh_token({"user_id": user.id})
 
     # 2. Check duplicate
+    print("6")
     exists = await db.execute(
         select(UserExchange).where(
             UserExchange.user_id == user.id,
             UserExchange.exchange_name == data.exchange_name.lower(),
         )
     )
+    print("7")
     if exists.scalar_one_or_none():
+        print("8")
         return {
-            "message": "{exchange_name} already connected",
+            "message": f"{data.exchange_name} already connected",
             "user": user,
             "access_token": access,
             "refresh_token": refresh,
             "token_type": "bearer",
             "status_code": 200
         }
-        
 
     # 3. Validate Coinbase credentials using CCXT
+    print("9")
     is_valid = await validate_coinbase_api(
         api_key=data.api_key,
         api_secret=data.api_secret,
         passphrase=data.passphrase
     )
-
+    print("10")
     if not is_valid:
         raise HTTPException(
             status_code=400,
             detail="Invalid API credentials — Coinbase connection failed"
         )
-
-    # 4. Save exchange credentials
+    
+    print("11")
+    # 4. Store credentials in AWS Secrets Manager
+    # try:
+    #     secret_arn = await secrets_manager_service.store_exchange_credentials(
+    #         user_id=user.id,
+    #         exchange_name=data.exchange_name.lower(),
+    #         api_key=data.api_key,
+    #         api_secret=data.api_secret,
+    #         passphrase=data.passphrase,
+    #     )
+    #     print(f"Stored credentials in Secrets Manager: {secret_arn}")
+    # except Exception as e:
+    #     print(f"Failed to store in Secrets Manager: {e}")
+    #     raise HTTPException(
+    #         status_code=500,
+    #         detail="Failed to securely store credentials"
+    #     )
+    
+    # 5. Save exchange record with encrypted values (dual storage approach)
+    # Store encrypted values in DB as backup/reference
     user_exchange = UserExchange(
-            user_id=user.id,
-            exchange_name=data.exchange_name.lower(),
-            api_key=await kms_service.encrypt(data.api_key),
-            api_secret=await kms_service.encrypt(data.api_secret),
-            passphrase=await kms_service.encrypt(data.passphrase),
-        )
+        user_id=user.id,
+        exchange_name=data.exchange_name.lower(),
+        api_key=await kms_service.encrypt(data.api_key),
+        api_secret=await kms_service.encrypt(data.api_secret),
+        passphrase=await kms_service.encrypt(data.passphrase),
+        # secret_arn=secret_arn,
+    )
 
-
+    print("12")
     db.add(user_exchange)
-
-    # 5. Mark user as connected
+    print("13")
+    
+    # 6. Mark user as connected
     user.is_exchange_connected = True
     user.step = 3
-
+    print("14")
+    
     await db.commit()
     await db.refresh(user)
     await db.refresh(user_exchange)
 
-    # 6. Generate tokens
-    
-
     return {
-        "message": "Coinbase exchange connected successfully",
+        "message": f"{data.exchange_name} connected successfully",
         "user": user,
         "access_token": access,
         "refresh_token": refresh,

@@ -144,5 +144,6 @@ class UserExchange(Base):
     api_key = Column(Text, nullable=False)
     api_secret = Column(Text, nullable=False)
     passphrase = Column(Text, nullable=True)
+    secret_arn = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="exchange_accounts")
