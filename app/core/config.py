@@ -68,9 +68,9 @@ class AppSettings(BaseSettings):
     DEFAULT_VS_CURRENCY: str = "usd"
 
     # --- Coinbase API Settings (Old/New Shared) ---
-    COINBASE_API_KEY_ENC: str
-    COINBASE_API_SECRET_ENC: str
-    COINBASE_API_PASSPHRASE_ENC: str
+    COINBASE_API_KEY_ENC: str | None = None
+    COINBASE_API_SECRET_ENC: str | None = None
+    COINBASE_API_PASSPHRASE_ENC: str | None = None
     COINBASE_EXCHANGE_SANDBOX: bool = False
 
     # --- CoinMarketCap APIs (New) ---
