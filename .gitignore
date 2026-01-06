@@ -133,4 +133,5 @@ Pipfile.lock
 __pypackages__/
 .envrc
 
-# Added a comment
+# Not send migrations to the project
+migrations/versions/*

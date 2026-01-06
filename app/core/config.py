@@ -4,7 +4,7 @@ from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 
-class Settings(BaseSettings):
+class AppSettings(BaseSettings):
     model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- Application ---
@@ -88,5 +88,5 @@ class Settings(BaseSettings):
     }
 
 
-def get_settings() -> Settings:
-    return Settings()
+def get_settings() -> AppSettings:
+    return AppSettings()
