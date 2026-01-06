@@ -19,19 +19,26 @@ async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) 
     # print("Validating Coinbase API credentials...", api_key, private_key)
 
     try:
+        print("_1")
+        print("API KEY ===>", api_key)
+        print("API SECRET ===>", api_secret)
+        print("PASSPHRASE ===>", passphrase)
         exchange = ccxt.coinbaseexchange({
             "apiKey": api_key.strip(),
             "secret": api_secret.strip(),     # BASE64 secret (NO PEM)
             "password": passphrase.strip(),   # Passphrase
             "enableRateLimit": True,
         })
+        print("_2")
         print(exchange.apiKey)
+        print("_3")
         exchange.set_sandbox_mode(True)
+        print("_4")
         await exchange.fetch_balance()
-
+        print("_5")
         return True
-
     except ccxt.AuthenticationError as e:
+        print("_6")
         print("Coinbase authentication failed:", str(e))
         return False
 
