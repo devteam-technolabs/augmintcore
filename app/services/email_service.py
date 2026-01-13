@@ -12,6 +12,7 @@ async def send_verification_email(to_email: str, otp: int, full_name: str, title
     msg["Subject"] = title
     msg["From"] = settings.SMTP_USER
     msg["To"] = to_email
+    print(otp)
 
     # Extract first name from full name
     # Render template

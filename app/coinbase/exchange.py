@@ -6,10 +6,42 @@ from app.security.kms_service import  kms_service
 from app.models.user import User, UserExchange
 from fastapi import Depends
 from fastapi import HTTPException
-
+from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 import base64
+import pandas as pd
+from app.auth.user import auth_user
 
+
+ 
+ 
+TIMEFRAME_RULES = {
+    "1m":  {"tf": "1m",  "max_days": 30},
+    "15m": {"tf": "15m", "max_days": 90},
+    "1h":  {"tf": "1h",  "max_days": 180},
+    "1d":  {"tf": "1d",  "max_days": 365},
+    "1w":  {"tf": "1w",  "max_days": 1095},
+}
+ 
+PERIOD_MAP = {
+    "1m": 30,
+    "3m": 90,
+    "6m": 180,
+    "1y": 365,
+}
+
+CRYPTO_NAME_MAP = {
+    "bitcoin": "BTC/USD",
+    "ethereum": "ETH/USD",
+    "solana": "SOL/USD",
+    "bnb": "BNB/USD",
+    "xrp": "XRP/USD",
+    "cardano": "ADA/USD",
+    "dogecoin": "DOGE/USD",
+    "avalanche": "AVAX/USD",
+    "chainlink": "LINK/USD",
+    "polygon": "MATIC/USD"
+}
 def clean_private_key(pem: str) -> str:
     return pem.replace("\\n", "\n").strip()
 
@@ -457,3 +489,76 @@ async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
     finally:
         if exchange:
             await exchange.close()
+
+async def get_historical_data(
+    user,
+    timeframe: str ,   # 1m, 15m, 1h, 1d, 1w
+    period: str  , # 1m, 3m, 6m, 1y
+    db: AsyncSession,
+    symbol: str ,
+
+):
+    target_symbol = CRYPTO_NAME_MAP.get(symbol.lower(), symbol.upper())
+    user_id = user.id
+    keys = await get_keys("coinbase", user_id, db)
+
+    exchange = ccxt.coinbaseexchange({
+            "apiKey": keys["api_key"],
+            "secret": keys["api_secret"],
+            "password": keys["passphrase"],
+            "enableRateLimit": True,
+        })
+
+    
+    if timeframe not in TIMEFRAME_RULES:
+        raise HTTPException(400, "Invalid timeframe")
+ 
+    if period not in PERIOD_MAP:
+        raise HTTPException(400, "Invalid period")
+ 
+    tf_rule = TIMEFRAME_RULES[timeframe]
+    requested_days = PERIOD_MAP[period]
+ 
+    # Enforce safety limits
+    days = min(requested_days, tf_rule["max_days"])
+ 
+    since = int(
+        (datetime.utcnow() - timedelta(days=days)).timestamp() * 1000
+    )
+ 
+    all_ohlcv = []
+    limit = 300
+    since_copy = since
+ 
+    while True:
+        ohlcv = await exchange.fetch_ohlcv(
+            target_symbol,
+            timeframe=tf_rule["tf"],
+            since=since_copy,
+            limit=limit
+        )
+ 
+        if not ohlcv:
+            break
+ 
+        all_ohlcv.extend(ohlcv)
+        print(f"Fetched {len(ohlcv)} candles, total so far: {len(all_ohlcv)}", all_ohlcv)
+        since_copy = ohlcv[-1][0] + 1
+ 
+        if ohlcv[-1][0] >= exchange.milliseconds():
+            break
+ 
+    df = pd.DataFrame(
+        all_ohlcv,
+        columns=["timestamp", "open", "high", "low", "close", "volume"]
+    )
+ 
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+ 
+    return {
+        "symbol": target_symbol,
+        "timeframe": timeframe,
+        "period": period,
+        "days_returned": days,
+        "candles": df.to_dict(orient="records"),
+    }

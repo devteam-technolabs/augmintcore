@@ -72,7 +72,7 @@ class AppSettings(BaseSettings):
     COINBASE_API_SECRET_ENC: str | None = None
     COINBASE_API_PASSPHRASE_ENC: str | None = None
     COINBASE_EXCHANGE_SANDBOX: bool = False
-
+    COINGECKO_PRO_API_KEY:str
     # --- CoinMarketCap APIs (New) ---
     CMC_DETAIL_URL: str = "https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail"
     CMC_LISTING_URL: str = "https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing"

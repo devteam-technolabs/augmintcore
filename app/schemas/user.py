@@ -211,3 +211,8 @@ class CheckoutSessionSchemas(BaseModel):
 class CheckoutSessionResponse(BaseModel):
     checkout_url: str
     status_code :Optional[int] = None
+
+class CoinGeckoCoinDataResponse(BaseModel):
+    status_code:Optional[int]=None
+    message:str
+    result:List[dict]
