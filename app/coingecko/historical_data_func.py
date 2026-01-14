@@ -39,7 +39,7 @@ async def get_coin_data(coin_ids):
             "symbol": coin.symbol,
             "price": coin.current_price,
             "volume_24h": coin.total_volume,
-            "vol/market_cap_24h": float(clean_string),
+            "val_market_cap_24h": float(clean_string),
             "fdv": coin.fully_diluted_valuation,
         })
 
