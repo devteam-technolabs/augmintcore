@@ -1,16 +1,29 @@
+# -----------------------------------------
+# Standard Library Imports
+# -----------------------------------------
+from datetime import datetime, timedelta
+import math
+import numpy as np
+import pandas as pd
+
+# -----------------------------------------
+# Third-Party Imports
+# -----------------------------------------
 import ccxt.async_support as ccxt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.db.session import get_async_session
-from app.security.kms_service import  kms_service
-from app.models.user import User, UserExchange
-from fastapi import Depends
-from fastapi import HTTPException
-from datetime import datetime, timedelta
+from fastapi import Depends, HTTPException
 from botocore.exceptions import ClientError
-import base64
-import pandas as pd
+from fastapi.concurrency import run_in_threadpool
+
+# -----------------------------------------
+# Local Application Imports
+# -----------------------------------------
+from app.db.session import get_async_session
+from app.security.kms_service import kms_service
+from app.models.user import User, UserExchange
 from app.auth.user import auth_user
+
 
 
  
@@ -117,13 +130,7 @@ async def get_keys(exchange_name:str,user_id:int, db: AsyncSession = Depends(get
         "passphrase": await safe_decrypt(ex.passphrase),
         "created_at": ex.created_at
     }
-    # return {
-    #     "exchange": exchange_name,
-    #     "api_key": await kms_service.decrypt(ex.api_key),
-    #     "api_secret": await kms_service.decrypt(ex.api_secret),
-    #     "passphrase": await kms_service.decrypt(ex.passphrase) if ex.passphrase else None,
-    #     "created_at": ex.created_at
-    # }
+
 async def get_crypt_currencies(exchange_name: str, user, db):
     exchange = None
 
@@ -561,4 +568,52 @@ async def get_historical_data(
         "period": period,
         "days_returned": days,
         "candles": df.to_dict(orient="records"),
+    }
+
+
+async def get_volatility_data(symbol: str, user, db):
+
+
+    keys = await get_keys("coinbase", user.id, db)
+
+    exchange = ccxt.coinbaseexchange({
+        "apiKey": keys["api_key"],
+        "secret": keys["api_secret"],
+        "password": keys["passphrase"],
+        "enableRateLimit": True,
+    })
+
+    symbol = CRYPTO_NAME_MAP.get(symbol)
+
+    # fetch 30 days of 1h candles → 720 candles
+    ohlcv = await exchange.fetch_ohlcv(symbol, timeframe="1h", limit=720)
+    await exchange.close()
+
+    if not ohlcv or len(ohlcv) < 2:
+        return {"symbol": symbol, "latest": None, "data": []}
+
+    closes = [c[4] for c in ohlcv]
+    timestamps = [c[0] for c in ohlcv]
+
+    prices = np.array(closes)
+
+    volatility_points = []
+
+    # Compute volatility for every candle (cumulative)
+    for i in range(2, len(prices)):  # start from index 2 because diff needs 2 points
+        window = prices[:i]
+
+        log_returns = np.diff(np.log(window))
+
+        vol = np.std(log_returns) * math.sqrt(365 * 24)
+
+        volatility_points.append({
+            "timestamp": timestamps[i],
+            "volatility": round(float(vol), 6)
+        })
+
+    return {
+        "symbol": symbol,
+        "latest": volatility_points[-1]["volatility"],
+        "data": volatility_points
     }

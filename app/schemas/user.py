@@ -216,3 +216,4 @@ class CoinGeckoCoinDataResponse(BaseModel):
     status_code:Optional[int]=None
     message:str
     result:List[dict]
+    volatility_data: dict | None = None
