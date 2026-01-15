@@ -48,10 +48,10 @@ CRYPTO_NAME_MAP = {
     "ethereum": "ETH/USD",
     "solana": "SOL/USD",
     "bnb": "BNB/USD",
-    "xrp": "XRP/USD",
+    "ripple": "XRP/USD",
     "cardano": "ADA/USD",
     "dogecoin": "DOGE/USD",
-    "avalanche": "AVAX/USD",
+    "avalanche-2": "AVAX/USD",
     "chainlink": "LINK/USD",
     "polygon": "MATIC/USD"
 }
@@ -512,8 +512,7 @@ async def get_historical_data(
     exchange = ccxt.coinbaseexchange({
             "apiKey": keys["api_key"],
             "secret": keys["api_secret"],
-            "password": keys["passphrase"],
-            "enableRateLimit": True,
+            "password": keys["passphrase"]
         })
 
     
