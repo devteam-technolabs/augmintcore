@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import math
 import numpy as np
 import pandas as pd
+import asyncio
+import functools
 
 # -----------------------------------------
 # Third-Party Imports
@@ -616,3 +618,16 @@ async def get_volatility_data(symbol: str, user, db):
         "latest": volatility_points[-1]["volatility"],
         "data": volatility_points
     }
+
+
+async def fetch_orderbook_async(symbol:str, user=None, db=None):
+    keys = await get_keys("coinbase", user.id, db)
+
+    exchange = ccxt.coinbaseexchange({
+        "apiKey": keys["api_key"],
+        "secret": keys["api_secret"],
+        "password": keys["passphrase"],
+        "enableRateLimit": True,
+    })
+    return exchange
+
