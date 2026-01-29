@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
+from pydantic_settings import BaseSettings
+
 
 class DBSettings(BaseSettings):
     model_config = ConfigDict(

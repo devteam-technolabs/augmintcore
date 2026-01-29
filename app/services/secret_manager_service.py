@@ -1,6 +1,8 @@
 import json
+
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -33,13 +35,13 @@ class SecretsManagerService:
         Returns the ARN of the created/updated secret
         """
         secret_name = self._get_secret_name(user_id, exchange_name)
-        
+
         # Prepare secret value
         secret_value = {
             "api_key": api_key,
             "api_secret": api_secret,
         }
-        
+
         if passphrase:
             secret_value["passphrase"] = passphrase
 
@@ -51,7 +53,7 @@ class SecretsManagerService:
                 Description=f"API credentials for {exchange_name} exchange - User {user_id}",
             )
             return response["ARN"]
-            
+
         except self.client.exceptions.ResourceNotFoundException:
             # Secret doesn't exist, create new one
             response = self.client.create_secret(
@@ -65,7 +67,7 @@ class SecretsManagerService:
                 ],
             )
             return response["ARN"]
-            
+
         except (BotoCoreError, ClientError) as e:
             raise RuntimeError(f"Secrets Manager store failed: {e}")
 
@@ -82,10 +84,12 @@ class SecretsManagerService:
             response = self.client.get_secret_value(SecretId=secret_name)
             secret_data = json.loads(response["SecretString"])
             return secret_data
-            
+
         except self.client.exceptions.ResourceNotFoundException:
-            raise ValueError(f"Credentials not found for user {user_id} on {exchange_name}")
-            
+            raise ValueError(
+                f"Credentials not found for user {user_id} on {exchange_name}"
+            )
+
         except (BotoCoreError, ClientError) as e:
             raise RuntimeError(f"Secrets Manager retrieval failed: {e}")
 
@@ -111,17 +115,17 @@ class SecretsManagerService:
                     RecoveryWindowInDays=7,
                 )
             return True
-            
+
         except self.client.exceptions.ResourceNotFoundException:
             return False
-            
+
         except (BotoCoreError, ClientError) as e:
             raise RuntimeError(f"Secrets Manager deletion failed: {e}")
 
     async def secret_exists(self, user_id: int, exchange_name: str) -> bool:
         """Check if secret exists for given user and exchange"""
         secret_name = self._get_secret_name(user_id, exchange_name)
-        
+
         try:
             self.client.describe_secret(SecretId=secret_name)
             return True

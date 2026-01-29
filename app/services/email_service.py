@@ -1,13 +1,17 @@
 from email.message import EmailMessage
+
 import aiosmtplib
 from fastapi.templating import Jinja2Templates
+
 from app.core.config import get_settings
 
 settings = get_settings()
 templates = Jinja2Templates(directory="app/templates")
 
 
-async def send_verification_email(to_email: str, otp: int, full_name: str, title: str = "Your OTP for Augmint"):
+async def send_verification_email(
+    to_email: str, otp: int, full_name: str, title: str = "Your OTP for Augmint"
+):
     msg = EmailMessage()
     msg["Subject"] = title
     msg["From"] = settings.SMTP_USER
@@ -17,7 +21,7 @@ async def send_verification_email(to_email: str, otp: int, full_name: str, title
     # Extract first name from full name
     # Render template
     html = templates.get_template("send_otp_email_template.html").render(
-    full_name=full_name,
+        full_name=full_name,
         otp=otp,
         email_bg_url="https://reone-bucket-new.s3.ca-central-1.amazonaws.com/emailBg.png",
         logo_url="https://reone-bucket-new.s3.ca-central-1.amazonaws.com/logo.png",

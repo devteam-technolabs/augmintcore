@@ -136,105 +136,100 @@
 # # asyncio.run(load_user_portfolio())
 
 
-
-
-
-
-from fastapi import FastAPI, WebSocket
-import ccxt
-import pandas as pd
-import numpy as np
-import json
 import asyncio
-import websocket
+import json
 import threading
 from datetime import datetime, timedelta
-from fastapi import HTTPException
- 
+
+import ccxt
+import numpy as np
+import pandas as pd
+import websocket
+from fastapi import FastAPI, HTTPException, WebSocket
+
 app = FastAPI(title="Crypto Trading Backend")
- 
+
 # ======================
 # CCXT COINBASE CONFIG
 # ======================
-exchange = ccxt.coinbaseexchange({
-    "apiKey": "76d97f29a7dba9afae61da53abdc172e",
-    "secret": "h3xlRF1bpXKrZM6I03Q4hTn1vw7por2rUM7vL+MK75PW9l3AnY6u/bJZvW30vOCeo81PvN+Mm/RhGjPcpXrJIQ==",
-    "password": "5gzc1ji04g2v",
-    "enableRateLimit": True,
-})
- 
+exchange = ccxt.coinbaseexchange(
+    {
+        "apiKey": "76d97f29a7dba9afae61da53abdc172e",
+        "secret": "h3xlRF1bpXKrZM6I03Q4hTn1vw7por2rUM7vL+MK75PW9l3AnY6u/bJZvW30vOCeo81PvN+Mm/RhGjPcpXrJIQ==",
+        "password": "5gzc1ji04g2v",
+        "enableRateLimit": True,
+    }
+)
+
 # Sandbox mode (IMPORTANT for testing)
 # exchange.set_sandbox_mode(True)
- 
+
 SYMBOL = "ETH/USD"
- 
- 
+
+
 TIMEFRAME_RULES = {
-    "1m":  {"tf": "1m",  "max_days": 30},
+    "1m": {"tf": "1m", "max_days": 30},
     "15m": {"tf": "15m", "max_days": 90},
-    "1h":  {"tf": "1h",  "max_days": 180},
-    "1d":  {"tf": "1d",  "max_days": 365},
-    "1w":  {"tf": "1w",  "max_days": 1095},
+    "1h": {"tf": "1h", "max_days": 180},
+    "1d": {"tf": "1d", "max_days": 365},
+    "1w": {"tf": "1w", "max_days": 1095},
 }
- 
+
 PERIOD_MAP = {
     "1m": 30,
     "3m": 90,
     "6m": 180,
     "1y": 365,
 }
- 
+
+
 # @app.get("/history")
 async def get_historical_data(
     symbol: str = SYMBOL,
-    timeframe: str = "1h",   # 1m, 15m, 1h, 1d, 1w
-    period: str = "1m"       # 1m, 3m, 6m, 1y
+    timeframe: str = "1h",  # 1m, 15m, 1h, 1d, 1w
+    period: str = "1m",  # 1m, 3m, 6m, 1y
 ):
     if timeframe not in TIMEFRAME_RULES:
         raise HTTPException(400, "Invalid timeframe")
- 
+
     if period not in PERIOD_MAP:
         raise HTTPException(400, "Invalid period")
- 
+
     tf_rule = TIMEFRAME_RULES[timeframe]
     requested_days = PERIOD_MAP[period]
- 
+
     # Enforce safety limits
     days = min(requested_days, tf_rule["max_days"])
- 
-    since = int(
-        (datetime.utcnow() - timedelta(days=days)).timestamp() * 1000
-    )
- 
+
+    since = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+
     all_ohlcv = []
     limit = 300
     since_copy = since
- 
+
     while True:
         ohlcv = exchange.fetch_ohlcv(
-            symbol,
-            timeframe=tf_rule["tf"],
-            since=since_copy,
-            limit=limit
+            symbol, timeframe=tf_rule["tf"], since=since_copy, limit=limit
         )
- 
+
         if not ohlcv:
             break
- 
+
         all_ohlcv.extend(ohlcv)
-        print(f"Fetched {len(ohlcv)} candles, total so far: {len(all_ohlcv)}", all_ohlcv)
+        print(
+            f"Fetched {len(ohlcv)} candles, total so far: {len(all_ohlcv)}", all_ohlcv
+        )
         since_copy = ohlcv[-1][0] + 1
- 
+
         if ohlcv[-1][0] >= exchange.milliseconds():
             break
- 
+
     df = pd.DataFrame(
-        all_ohlcv,
-        columns=["timestamp", "open", "high", "low", "close", "volume"]
+        all_ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"]
     )
- 
+
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
- 
+
     return {
         "symbol": symbol,
         "timeframe": timeframe,
@@ -242,5 +237,6 @@ async def get_historical_data(
         "days_returned": days,
         "candles": df.to_dict(orient="records"),
     }
+
 
 asyncio.run(get_historical_data())

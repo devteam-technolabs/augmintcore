@@ -1,10 +1,9 @@
 import re
 from datetime import datetime
-from typing import Optional
-from typing import List
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
-from typing import Literal
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -12,7 +11,10 @@ class UserCreate(BaseModel):
     confirm_password: str = Field(..., min_length=8)
     full_name: Optional[str] = None
     # phone_number: Optional[str] = None
-    phone_number: str = Field(..., description="Phone number must be unique across all users. Format: +[country_code][number], e.g., +1-123-456-7890")
+    phone_number: str = Field(
+        ...,
+        description="Phone number must be unique across all users. Format: +[country_code][number], e.g., +1-123-456-7890",
+    )
     country_code: Optional[str] = None
 
     @validator("password")
@@ -38,8 +40,10 @@ class UserCreate(BaseModel):
     @validator("phone_number")
     def validate_phone_number(cls, v):
         # Basic format validation (adjust regex as needed for your requirements, e.g., international format)
-        if not re.match(r'^\+?\d{1,4}[-.\s]?\d{1,14}$', v):
-            raise ValueError("Invalid phone number format. Use international format like +1-123-456-7890")
+        if not re.match(r"^\+?\d{1,4}[-.\s]?\d{1,14}$", v):
+            raise ValueError(
+                "Invalid phone number format. Use international format like +1-123-456-7890"
+            )
         # Note: Uniqueness must be enforced in the service/endpoint layer by querying the database
         # (e.g., check if a user with this phone_number already exists before creating the user).
         # Example: if User.query.filter_by(phone_number=v).first(): raise ValueError("Phone number already in use")
@@ -67,9 +71,9 @@ class UserResponse(BaseModel):
     updated_at: datetime
     step: Optional[int] = 0
     addresses: List["AddressResponse"] = Field(default_factory=list)
+
     class Config:
         from_attributes = True
-    
 
 
 class MessageUserResponse(BaseModel):
@@ -102,7 +106,7 @@ class AddressCreate(BaseModel):
     state: Optional[str] = None
     zip_code: str
     country: str
-    step : Optional[int] = 0
+    step: Optional[int] = 0
 
 
 class AddressResponse(BaseModel):
@@ -135,7 +139,7 @@ class MFAResetResponse(BaseModel):
     qr_code_base64: str
     user: UserResponse
     model_config = ConfigDict(from_attributes=True)
-    status_code :Optional[int] = None
+    status_code: Optional[int] = None
 
 
 class MFAEnableResponse(BaseModel):
@@ -144,7 +148,7 @@ class MFAEnableResponse(BaseModel):
     qr_code_base64: str
     user: UserResponse
     model_config = ConfigDict(from_attributes=True)
-    status_code :Optional[int] = None
+    status_code: Optional[int] = None
 
 
 class MFAVerifyResponse(BaseModel):
@@ -153,7 +157,7 @@ class MFAVerifyResponse(BaseModel):
     refresh_token: str | None = None
     token_type: str | None = "bearer"
     user: UserResponse
-    status_code :Optional[int] = None
+    status_code: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -164,7 +168,7 @@ class LoginResponse(BaseModel):
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     token_type: Optional[str] = None
-    status_code :Optional[int] = None
+    status_code: Optional[int] = None
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -201,19 +205,23 @@ class ResetPasswordRequest(BaseModel):
     #         raise ValueError("Passwords do not match")
     #     return v
 
+
 class MFAVerifyRequest(BaseModel):
     otp: str
 
+
 class CheckoutSessionSchemas(BaseModel):
-    plan_duration: Literal['monthly','yearly']
-    plan_name:str
+    plan_duration: Literal["monthly", "yearly"]
+    plan_name: str
+
 
 class CheckoutSessionResponse(BaseModel):
     checkout_url: str
-    status_code :Optional[int] = None
+    status_code: Optional[int] = None
+
 
 class CoinGeckoCoinDataResponse(BaseModel):
-    status_code:Optional[int]=None
-    message:str
-    result:List[dict]
+    status_code: Optional[int] = None
+    message: str
+    result: List[dict]
     volatility_data: dict | None = None

@@ -1,13 +1,11 @@
 import asyncio
+
 from app.security.kms_service import kms_service
+
 
 async def main():
     print("API KEY ENC:")
-    print(
-        await kms_service.encrypt(
-            "76d97f29a7dba9afae61da53abdc172e"
-        )
-    )
+    print(await kms_service.encrypt("76d97f29a7dba9afae61da53abdc172e"))
 
     print("\nSECRET ENC:")
     print(
@@ -17,11 +15,8 @@ async def main():
     )
 
     print("\nPASSPHRASE ENC:")
-    print(
-        await kms_service.encrypt(
-            "5gzc1ji04g2v"
-        )
-    )
+    print(await kms_service.encrypt("5gzc1ji04g2v"))
+
 
 if __name__ == "__main__":
     asyncio.run(main())

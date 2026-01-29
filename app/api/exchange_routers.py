@@ -1,18 +1,32 @@
+import ccxt.async_support as ccxt
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-import ccxt.async_support as ccxt
-from app.db.session import get_async_session
+
 from app.auth.user import auth_user
-from app.schemas.exchange import ExchangeConnectRequest, ExchangeConnectResponse, CCTXResponse
-from app.schemas.user import UserResponse
+from app.coinbase.exchange import (
+    get_crypt_currencies,
+    get_historical_data,
+    get_profit_and_loss,
+    get_total_account_value,
+    get_total_coin_value,
+    user_portfolio_data,
+    validate_coinbase_api,
+)
+from app.db.session import get_async_session
 from app.models.user import User, UserExchange
-from app.services.auth_service import create_access_token, create_refresh_token
+from app.schemas.exchange import (
+    CCTXResponse,
+    ExchangeConnectRequest,
+    ExchangeConnectResponse,
+)
+from app.schemas.user import UserResponse
 from app.security.kms_service import kms_service
-from app.coinbase.exchange import validate_coinbase_api,get_crypt_currencies,user_portfolio_data,get_total_coin_value,get_total_account_value,get_profit_and_loss,get_historical_data
+from app.services.auth_service import create_access_token, create_refresh_token
 from app.services.secret_manager_service import secrets_manager_service
 
 router = APIRouter(prefix="/exchange", tags=["Exchange"])
+
 
 @router.post("/coinbase/connect", response_model=ExchangeConnectResponse)
 async def connect_exchange(
@@ -51,41 +65,38 @@ async def connect_exchange(
             "access_token": access,
             "refresh_token": refresh,
             "token_type": "bearer",
-            "status_code": 200
+            "status_code": 200,
         }
 
     # 3. Validate Coinbase credentials using CCXT
     print("9")
     is_valid = await validate_coinbase_api(
-        api_key=data.api_key,
-        api_secret=data.api_secret,
-        passphrase=data.passphrase
+        api_key=data.api_key, api_secret=data.api_secret, passphrase=data.passphrase
     )
     print("10")
     if not is_valid:
         raise HTTPException(
             status_code=400,
-            detail="Invalid API credentials — Coinbase connection failed"
+            detail="Invalid API credentials — Coinbase connection failed",
         )
-    
+
     print("11")
     # 4. Store credentials in AWS Secrets Manager
-    # try:
-    #     secret_arn = await secrets_manager_service.store_exchange_credentials(
-    #         user_id=user.id,
-    #         exchange_name=data.exchange_name.lower(),
-    #         api_key=data.api_key,
-    #         api_secret=data.api_secret,
-    #         passphrase=data.passphrase,
-    #     )
-    #     print(f"Stored credentials in Secrets Manager: {secret_arn}")
-    # except Exception as e:
-    #     print(f"Failed to store in Secrets Manager: {e}")
-    #     raise HTTPException(
-    #         status_code=500,
-    #         detail="Failed to securely store credentials"
-    #     )
-    
+    try:
+        secret_arn = await secrets_manager_service.store_exchange_credentials(
+            user_id=user.id,
+            exchange_name=data.exchange_name.lower(),
+            api_key=data.api_key,
+            api_secret=data.api_secret,
+            passphrase=data.passphrase,
+        )
+        print(f"Stored credentials in Secrets Manager: {secret_arn}")
+    except Exception as e:
+        print(f"Failed to store in Secrets Manager: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to securely store credentials"
+        )
+
     # 5. Save exchange record with encrypted values (dual storage approach)
     # Store encrypted values in DB as backup/reference
     user_exchange = UserExchange(
@@ -94,18 +105,18 @@ async def connect_exchange(
         api_key=await kms_service.encrypt(data.api_key),
         api_secret=await kms_service.encrypt(data.api_secret),
         passphrase=await kms_service.encrypt(data.passphrase),
-        # secret_arn=secret_arn,
+        secret_arn=secret_arn,
     )
 
     print("12")
     db.add(user_exchange)
     print("13")
-    
+
     # 6. Mark user as connected
     user.is_exchange_connected = True
     user.step = 3
     print("14")
-    
+
     await db.commit()
     await db.refresh(user)
     await db.refresh(user_exchange)
@@ -116,13 +127,12 @@ async def connect_exchange(
         "access_token": access,
         "refresh_token": refresh,
         "token_type": "bearer",
-        "status_code": 200
+        "status_code": 200,
     }
 
 
 @router.get("/cctx", response_model=CCTXResponse)
-async def connect_exchange(
-):    # Just a test endpoint to list all exchanges in CCXT
+async def connect_exchange():  # Just a test endpoint to list all exchanges in CCXT
     exchnges_data = ccxt.exchanges
     return {
         "message": "List all exchanges in CCXT",
@@ -131,56 +141,54 @@ async def connect_exchange(
     }
 
 
-@router.get("/crypto/currenices",response_model=CCTXResponse)
-async def get_crypt_prices(exchange_name :str, db: AsyncSession = Depends(get_async_session),
-    current_user: User = Security(auth_user.get_current_user)):
+@router.get("/crypto/currenices", response_model=CCTXResponse)
+async def get_crypt_prices(
+    exchange_name: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user),
+):
 
-    results = await db.execute(select(User).where(User.id==current_user.id))
+    results = await db.execute(select(User).where(User.id == current_user.id))
     user = results.scalar_one_or_none()
 
     if not user:
         raise HTTPException(404, "User not found")
-    
+
     try:
 
-        crypto_values_data = await get_crypt_currencies(exchange_name,user,db)
+        crypto_values_data = await get_crypt_currencies(exchange_name, user, db)
         return {
-            "message":"List of all crypto currencies",
+            "message": "List of all crypto currencies",
             "status_code": 200,
-            "data": crypto_values_data
-
+            "data": crypto_values_data,
         }
     except Exception as e:
-        return {
-            "message": "An error occured",
-            "status_code": 400,
-            "data":str(e)
-        }
+        return {"message": "An error occured", "status_code": 400, "data": str(e)}
 
 
 @router.get("/get-clean-portfolio")
-async def get_portfolio(exchange_name:str, db:AsyncSession=Depends(get_async_session),
-        current_user:User=Security(auth_user.get_current_user)):
-        results = await db.execute(select(User).where(User.id ==current_user.id))
-        user = results.scalar_one_or_none()
+async def get_portfolio(
+    exchange_name: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user),
+):
+    results = await db.execute(select(User).where(User.id == current_user.id))
+    user = results.scalar_one_or_none()
 
-        if not user:
-            raise HTTPException(404,"User not found")
+    if not user:
+        raise HTTPException(404, "User not found")
 
-        try:
-            get_user_portfolio_data = await user_portfolio_data(exchange_name,user,db)
+    try:
+        get_user_portfolio_data = await user_portfolio_data(exchange_name, user, db)
 
-            return {
-                "message": "List of all data ",
-                "status_code" :200,
-                "data": get_user_portfolio_data
-            }
-        except Exception as e:
-             return {
-            "message": "An error occured",
-            "status_code": 400,
-            "data":str(e)
+        return {
+            "message": "List of all data ",
+            "status_code": 200,
+            "data": get_user_portfolio_data,
         }
+    except Exception as e:
+        return {"message": "An error occured", "status_code": 400, "data": str(e)}
+
 
 @router.get("/total-coin-value")
 async def total_coin_value(
@@ -212,7 +220,6 @@ async def total_coin_value(
         )
 
 
-
 @router.get("/portfolio/total-account-value")
 async def total_account_value(
     exchange_name: str,
@@ -234,9 +241,6 @@ async def total_account_value(
     }
 
 
-
-
-
 @router.get("/portfolio/profit-loss")
 async def portfolio_profit_loss(
     exchange_name: str,
@@ -244,10 +248,9 @@ async def portfolio_profit_loss(
     db: AsyncSession = Depends(get_async_session),
 ):
     return await get_profit_and_loss(
-        exchange_name=exchange_name.lower(),
-        user=current_user,
-        db=db
+        exchange_name=exchange_name.lower(), user=current_user, db=db
     )
+
 
 @router.get("/get-historical-data")
 async def get_ohlc_data(
@@ -257,4 +260,6 @@ async def get_ohlc_data(
     current_user: User = Security(auth_user.get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    return await get_historical_data(timeframe=timeframe,period=period,user=current_user,db=db,symbol=coin_id)
+    return await get_historical_data(
+        timeframe=timeframe, period=period, user=current_user, db=db, symbol=coin_id
+    )

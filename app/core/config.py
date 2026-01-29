@@ -5,7 +5,9 @@ from pydantic_settings import BaseSettings
 
 
 class AppSettings(BaseSettings):
-    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = ConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     # --- Application ---
     APP_NAME: str = "AugmintCore"
@@ -50,12 +52,12 @@ class AppSettings(BaseSettings):
     REFRESH_SECRET_KEY: str
     ACCESS_SECRET_KEY: str
     STRIPE_SECRET_KEY: str
-    PRICE_ID_YEARLY: dict 
-    PRICE_ID_MONTHLY: dict 
-    STRIPE_WEBHOOK_SECRET: str  
+    PRICE_ID_YEARLY: dict
+    PRICE_ID_MONTHLY: dict
+    STRIPE_WEBHOOK_SECRET: str
 
     # --- KMS / AWS ---
-    KMS_KEY_ID: str 
+    KMS_KEY_ID: str
     AWS_REGION: str
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
@@ -72,10 +74,14 @@ class AppSettings(BaseSettings):
     COINBASE_API_SECRET_ENC: str | None = None
     COINBASE_API_PASSPHRASE_ENC: str | None = None
     COINBASE_EXCHANGE_SANDBOX: bool = False
-    COINGECKO_PRO_API_KEY:str
+    COINGECKO_PRO_API_KEY: str
     # --- CoinMarketCap APIs (New) ---
-    CMC_DETAIL_URL: str = "https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail"
-    CMC_LISTING_URL: str = "https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing"
+    CMC_DETAIL_URL: str = (
+        "https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail"
+    )
+    CMC_LISTING_URL: str = (
+        "https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing"
+    )
 
     # --- Dashboard Configuration (New) ---
     TIMEFRAME_MAP: dict = {

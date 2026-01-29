@@ -133,5 +133,8 @@ Pipfile.lock
 __pypackages__/
 .envrc
 
-# Not send migrations to the project
-migrations/versions/*
+# Alembic migrations - ignore generated files
+migrations/versions/*.py
+
+# Keep the versions directory tracked
+!migrations/versions/.gitkeep

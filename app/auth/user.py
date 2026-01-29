@@ -12,8 +12,9 @@ from sqlalchemy.future import select
 from app.core.config import get_settings
 from app.db.session import get_async_session
 from app.models.user import Address, User
-from app.utils.hashing import hash_password
 from app.services.payment_service import payment_service
+from app.utils.hashing import hash_password
+
 settings = get_settings()
 
 # oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
@@ -25,7 +26,7 @@ class AuthUser:
     async def get_by_email(self, db: AsyncSession, email: str):
         result = await db.execute(select(User).where(User.email == email))
         return result.scalars().first()
-    
+
     async def get_by_phone(self, db: AsyncSession, phone: str):
         result = await db.execute(select(User).where(User.phone_number == phone))
         return result.scalars().first()
@@ -41,7 +42,6 @@ class AuthUser:
             full_name=obj_in.full_name,
             phone_number=obj_in.phone_number,
             country_code=obj_in.country_code,
-            
         )
 
         db.add(db_obj)
@@ -90,8 +90,8 @@ class AuthUser:
 
         # Mark verified
         user.is_email_verify = True
-        if user.is_email_verify ==True:
-            user.step=1
+        if user.is_email_verify == True:
+            user.step = 1
         stripe_id = await payment_service.create_stripe_customer_id(user)
         user.stripe_customer_id = stripe_id
         user.email_otp = None
@@ -112,7 +112,7 @@ class AuthUser:
             zip_code=obj_in.zip_code,
             country=obj_in.country,
         )
-        
+
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
@@ -146,6 +146,3 @@ class AuthUser:
 
 
 auth_user = AuthUser()
-
-
-

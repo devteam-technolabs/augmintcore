@@ -1,5 +1,6 @@
 # app/services/candles.py
 import httpx
+
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -9,9 +10,8 @@ settings = get_settings()
 async def fetch_candles(symbol: str, granularity: int = 3600):
     product_id = f"{symbol.upper()}-USD"
 
-    url = (
-        settings.COINBASE_REST_URL
-        + settings.COINBASE_CANDLES_PATH.format(product_id=product_id)
+    url = settings.COINBASE_REST_URL + settings.COINBASE_CANDLES_PATH.format(
+        product_id=product_id
     )
 
     async with httpx.AsyncClient(timeout=10) as client:
@@ -40,14 +40,15 @@ async def fetch_candles(symbol: str, granularity: int = 3600):
 
 # New updated code for new requirement
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 async def fetch_candles_v2(symbol: str, granularity: int = 3600):
     product_id = f"{symbol.upper()}-USD"
 
-    url = (
-        settings.COINBASE_REST_URL
-        + settings.COINBASE_CANDLES_PATH.format(product_id=product_id)
+    url = settings.COINBASE_REST_URL + settings.COINBASE_CANDLES_PATH.format(
+        product_id=product_id
     )
 
     try:
@@ -55,10 +56,10 @@ async def fetch_candles_v2(symbol: str, granularity: int = 3600):
             res = await client.get(url, params={"granularity": granularity})
             res.raise_for_status()
             candles = res.json()
-            
+
             if not candles:
                 return []
-                
+
             return [
                 {
                     "time": c[0],

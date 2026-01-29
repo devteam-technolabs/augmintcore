@@ -16,8 +16,6 @@ async def get_coinbase_credentials():
     return {
         "apiKey": await kms_service.decrypt(settings.COINBASE_API_KEY_ENC),
         "secret": await kms_service.decrypt(settings.COINBASE_API_SECRET_ENC),
-        "passphrase": await kms_service.decrypt(
-            settings.COINBASE_API_PASSPHRASE_ENC
-        ),
+        "passphrase": await kms_service.decrypt(settings.COINBASE_API_PASSPHRASE_ENC),
         "sandbox": settings.COINBASE_EXCHANGE_SANDBOX,
     }

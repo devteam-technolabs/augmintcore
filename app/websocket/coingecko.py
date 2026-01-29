@@ -1,4 +1,5 @@
 import httpx
+
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -70,10 +71,10 @@ async def fetch_top_ten_v2(vs_currency: str | None = None):
             "fdv": coin.get("fully_diluted_valuation"),
             "change": coin["price_change_percentage_24h"],
             "sparkline": coin["sparkline_in_7d"]["price"],
-
         }
         for coin in data
     ]
+
 
 async def fetch_coin_details(symbol: str, vs_currency: str = "usd"):
     """
@@ -96,9 +97,9 @@ async def fetch_coin_details(symbol: str, vs_currency: str = "usd"):
         "TRX": "tron",
         "TON": "the-open-network",
     }
-    
+
     coin_id = symbol_to_id.get(symbol.upper(), symbol.lower())
-    
+
     url = settings.COINGECKO_MARKETS_URL
     params = {
         "vs_currency": vs_currency.lower(),
@@ -121,9 +122,8 @@ async def fetch_coin_details(symbol: str, vs_currency: str = "usd"):
         "total_volume": coin.get("total_volume"),
         "fdv": coin.get("fully_diluted_valuation"),
         "vol_mkt_cap_ratio": (
-            coin.get("total_volume") / coin.get("market_cap") 
-            if coin.get("market_cap") and coin.get("total_volume") 
+            coin.get("total_volume") / coin.get("market_cap")
+            if coin.get("market_cap") and coin.get("total_volume")
             else 0
-        )
+        ),
     }
-

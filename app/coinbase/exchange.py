@@ -1,43 +1,40 @@
 # -----------------------------------------
 # Standard Library Imports
 # -----------------------------------------
-from datetime import datetime, timedelta
-import math
-import numpy as np
-import pandas as pd
 import asyncio
 import functools
+import math
+from datetime import datetime, timedelta
 
 # -----------------------------------------
 # Third-Party Imports
 # -----------------------------------------
 import ccxt.async_support as ccxt
+import numpy as np
+import pandas as pd
+from botocore.exceptions import ClientError
+from fastapi import Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from fastapi import Depends, HTTPException
-from botocore.exceptions import ClientError
-from fastapi.concurrency import run_in_threadpool
+
+from app.auth.user import auth_user
 
 # -----------------------------------------
 # Local Application Imports
 # -----------------------------------------
 from app.db.session import get_async_session
-from app.security.kms_service import kms_service
 from app.models.user import User, UserExchange
-from app.auth.user import auth_user
+from app.security.kms_service import kms_service
 
-
-
- 
- 
 TIMEFRAME_RULES = {
-    "1m":  {"tf": "1m",  "max_days": 30},
+    "1m": {"tf": "1m", "max_days": 30},
     "15m": {"tf": "15m", "max_days": 90},
-    "1h":  {"tf": "1h",  "max_days": 180},
-    "1d":  {"tf": "1d",  "max_days": 365},
-    "1w":  {"tf": "1w",  "max_days": 1095},
+    "1h": {"tf": "1h", "max_days": 180},
+    "1d": {"tf": "1d", "max_days": 365},
+    "1w": {"tf": "1w", "max_days": 1095},
 }
- 
+
 PERIOD_MAP = {
     "1m": 30,
     "3m": 90,
@@ -55,37 +52,53 @@ CRYPTO_NAME_MAP = {
     "dogecoin": "DOGE/USD",
     "avalanche-2": "AVAX/USD",
     "chainlink": "LINK/USD",
-    "polygon": "MATIC/USD"
+    "polygon": "MATIC/USD",
 }
+
+
 def clean_private_key(pem: str) -> str:
     return pem.replace("\\n", "\n").strip()
 
 
 async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) -> bool:
+    exchange = None
     private_key = clean_private_key(api_secret)
-    # print("Validating Coinbase API credentials...", api_key, private_key)
 
     try:
-        print("_1")
-        print("API KEY ===>", api_key)
-        print("API SECRET ===>", api_secret)
-        print("PASSPHRASE ===>", passphrase)
-        exchange = ccxt.coinbaseexchange({
-            "apiKey": api_key.strip(),
-            "secret": api_secret.strip(),     # BASE64 secret (NO PEM)
-            "password": passphrase.strip(),   # Passphrase
-            "enableRateLimit": True,
-        })
-        print("_2")
-        print(exchange.apiKey)
-        print("_3")
-        exchange.set_sandbox_mode(True)
-        print("_4")
+        exchange = ccxt.coinbaseadvanced(
+            {
+                "apiKey": api_key.strip(),
+                "secret": private_key,
+                "enableRateLimit": True,
+            }
+        )
         await exchange.fetch_balance()
-        print("_5")
-        return True
+        return exchange
+
+    except Exception as e:
+        if exchange:
+            try:
+                await exchange.close()
+            except:
+                pass
+
+    exchange = None
+    try:
+        exchange = ccxt.coinbaseexchange(
+            {
+                "apiKey": api_key.strip(),
+                "secret": api_secret.strip(),
+                "password": passphrase.strip(),
+                "enableRateLimit": True,
+            }
+        )
+
+        exchange.set_sandbox_mode(True)
+
+        await exchange.fetch_balance()
+        return exchange
+
     except ccxt.AuthenticationError as e:
-        print("_6")
         print("Coinbase authentication failed:", str(e))
         return False
 
@@ -95,8 +108,12 @@ async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) 
 
     finally:
         if exchange:
-            await exchange.close()
-            
+            try:
+                await exchange.close()
+            except:
+                pass
+
+
 async def safe_decrypt(value: str | None) -> str | None:
     if not value:
         return None
@@ -108,18 +125,22 @@ async def safe_decrypt(value: str | None) -> str | None:
     except Exception:
         # 🔥 NOT KMS ENCRYPTED → assume plaintext
         return value
-    
-async def get_keys(exchange_name:str,user_id:int, db: AsyncSession = Depends(get_async_session),):
+
+
+async def get_keys(
+    exchange_name: str,
+    user_id: int,
+    db: AsyncSession = Depends(get_async_session),
+):
 
     exchange_name = exchange_name.lower()
 
     result = await db.execute(
         select(UserExchange).where(
-            UserExchange.user_id == user_id,
-            UserExchange.exchange_name == exchange_name
+            UserExchange.user_id == user_id, UserExchange.exchange_name == exchange_name
         )
     )
-    print(result,'gggggggggggggggggggggggggggg')
+    print(result, "gggggggggggggggggggggggggggg")
     ex = result.scalar_one_or_none()
 
     if not ex:
@@ -130,8 +151,9 @@ async def get_keys(exchange_name:str,user_id:int, db: AsyncSession = Depends(get
         "api_key": await safe_decrypt(ex.api_key),
         "api_secret": await safe_decrypt(ex.api_secret),
         "passphrase": await safe_decrypt(ex.passphrase),
-        "created_at": ex.created_at
+        "created_at": ex.created_at,
     }
+
 
 async def get_crypt_currencies(exchange_name: str, user, db):
     exchange = None
@@ -145,12 +167,14 @@ async def get_crypt_currencies(exchange_name: str, user, db):
         passphrase = user_keys["passphrase"]
 
         # ✅ CCXT Coinbase Exchange
-        exchange = ccxt.coinbaseexchange({
-            "apiKey": api_key,
-            "secret": secret,
-            "password": passphrase,
-            "enableRateLimit": True,
-        })
+        exchange = ccxt.coinbaseexchange(
+            {
+                "apiKey": api_key,
+                "secret": secret,
+                "password": passphrase,
+                "enableRateLimit": True,
+            }
+        )
 
         # ✅ Sandbox mode
         exchange.set_sandbox_mode(True)
@@ -208,7 +232,6 @@ async def get_crypt_currencies(exchange_name: str, user, db):
             await exchange.close()
 
 
-
 async def user_portfolio_data(exchange_name: str, user, db):
     exchange = None
 
@@ -221,12 +244,14 @@ async def user_portfolio_data(exchange_name: str, user, db):
         passphrase = usr_keys["passphrase"]
 
         # ✅ Correct CCXT exchange
-        exchange = ccxt.coinbaseexchange({
-            "apiKey": api_key,
-            "secret": secret,
-            "password": passphrase,
-            "enableRateLimit": True,
-        })
+        exchange = ccxt.coinbaseexchange(
+            {
+                "apiKey": api_key,
+                "secret": secret,
+                "password": passphrase,
+                "enableRateLimit": True,
+            }
+        )
 
         # ✅ Sandbox mode (VERY IMPORTANT)
         exchange.set_sandbox_mode(True)
@@ -307,12 +332,14 @@ async def get_total_coin_value(exchange_name: str, user, db):
         passphrase = usr_keys["passphrase"]
 
         # ✅ Correct Coinbase Exchange
-        exchange = ccxt.coinbaseexchange({
-            "apiKey": api_key,
-            "secret": secret,
-            "password": passphrase,
-            "enableRateLimit": True,
-        })
+        exchange = ccxt.coinbaseexchange(
+            {
+                "apiKey": api_key,
+                "secret": secret,
+                "password": passphrase,
+                "enableRateLimit": True,
+            }
+        )
 
         # ✅ Sandbox mode
         exchange.set_sandbox_mode(True)
@@ -352,7 +379,6 @@ async def get_total_coin_value(exchange_name: str, user, db):
             await exchange.close()
 
 
-
 async def get_total_account_value(exchange_name: str, user, db):
     exchange = None
     try:
@@ -363,12 +389,14 @@ async def get_total_account_value(exchange_name: str, user, db):
         passphrase = keys.get("passphrase")
 
         # 🔌 Coinbase Exchange
-        exchange = ccxt.coinbaseexchange({
-            "apiKey": api_key,
-            "secret": api_secret,
-            "password": passphrase,
-            "enableRateLimit": True,
-        })
+        exchange = ccxt.coinbaseexchange(
+            {
+                "apiKey": api_key,
+                "secret": api_secret,
+                "password": passphrase,
+                "enableRateLimit": True,
+            }
+        )
 
         exchange.set_sandbox_mode(True)  # ✅ Sandbox safe
 
@@ -400,12 +428,14 @@ async def get_total_account_value(exchange_name: str, user, db):
             if usd_value:
                 total_usd += usd_value
 
-            assets.append({
-                "asset": asset,
-                "amount": float(values),
-                "usd_price": usd_price,
-                "usd_value": round(usd_value, 2) if usd_value else None
-            })
+            assets.append(
+                {
+                    "asset": asset,
+                    "amount": float(values),
+                    "usd_price": usd_price,
+                    "usd_value": round(usd_value, 2) if usd_value else None,
+                }
+            )
 
         return {
             "total_account_value": round(total_usd, 2),
@@ -418,19 +448,20 @@ async def get_total_account_value(exchange_name: str, user, db):
             await exchange.close()
 
 
-
 async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
     exchange = None
 
     try:
         keys = await get_keys(exchange_name, user.id, db)
 
-        exchange = ccxt.coinbaseexchange({
-            "apiKey": keys["api_key"],
-            "secret": keys["api_secret"],
-            "password": keys["passphrase"],
-            "enableRateLimit": True,
-        })
+        exchange = ccxt.coinbaseexchange(
+            {
+                "apiKey": keys["api_key"],
+                "secret": keys["api_secret"],
+                "password": keys["passphrase"],
+                "enableRateLimit": True,
+            }
+        )
 
         exchange.set_sandbox_mode(True)
         await exchange.load_markets()
@@ -452,11 +483,13 @@ async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
                 usd_value = float(qty)
                 total_portfolio_value += usd_value
 
-                assets.append({
-                    "asset": currency,
-                    "quantity": float(qty),
-                    "usd_value": round(usd_value, 2),
-                })
+                assets.append(
+                    {
+                        "asset": currency,
+                        "quantity": float(qty),
+                        "usd_value": round(usd_value, 2),
+                    }
+                )
                 continue
 
             pair = f"{currency}/USD"
@@ -477,14 +510,16 @@ async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
             else:
                 total_loss += abs(pnl)
 
-            assets.append({
-                "asset": currency,
-                "quantity": float(qty),
-                "buy_price": round(buy_price, 2),
-                "current_price": round(current_price, 2),
-                "usd_value": round(usd_value, 2),
-                "profit_or_loss": round(pnl, 2),
-            })
+            assets.append(
+                {
+                    "asset": currency,
+                    "quantity": float(qty),
+                    "buy_price": round(buy_price, 2),
+                    "current_price": round(current_price, 2),
+                    "usd_value": round(usd_value, 2),
+                    "profit_or_loss": round(pnl, 2),
+                }
+            )
 
         return {
             "exchange": exchange_name,
@@ -499,70 +534,67 @@ async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
         if exchange:
             await exchange.close()
 
+
 async def get_historical_data(
     user,
-    timeframe: str ,   # 1m, 15m, 1h, 1d, 1w
-    period: str  , # 1m, 3m, 6m, 1y
+    timeframe: str,  # 1m, 15m, 1h, 1d, 1w
+    period: str,  # 1m, 3m, 6m, 1y
     db: AsyncSession,
-    symbol: str ,
-
+    symbol: str,
 ):
     target_symbol = CRYPTO_NAME_MAP.get(symbol.lower(), symbol.upper())
     user_id = user.id
     keys = await get_keys("coinbase", user_id, db)
 
-    exchange = ccxt.coinbaseexchange({
+    exchange = ccxt.coinbaseexchange(
+        {
             "apiKey": keys["api_key"],
             "secret": keys["api_secret"],
-            "password": keys["passphrase"]
-        })
+            "password": keys["passphrase"],
+        }
+    )
 
-    
     if timeframe not in TIMEFRAME_RULES:
         raise HTTPException(400, "Invalid timeframe")
- 
+
     if period not in PERIOD_MAP:
         raise HTTPException(400, "Invalid period")
- 
+
     tf_rule = TIMEFRAME_RULES[timeframe]
     requested_days = PERIOD_MAP[period]
- 
+
     # Enforce safety limits
     days = min(requested_days, tf_rule["max_days"])
- 
-    since = int(
-        (datetime.utcnow() - timedelta(days=days)).timestamp() * 1000
-    )
- 
+
+    since = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+
     all_ohlcv = []
     limit = 300
     since_copy = since
- 
+
     while True:
         ohlcv = await exchange.fetch_ohlcv(
-            target_symbol,
-            timeframe=tf_rule["tf"],
-            since=since_copy,
-            limit=limit
+            target_symbol, timeframe=tf_rule["tf"], since=since_copy, limit=limit
         )
- 
+
         if not ohlcv:
             break
- 
+
         all_ohlcv.extend(ohlcv)
-        print(f"Fetched {len(ohlcv)} candles, total so far: {len(all_ohlcv)}", all_ohlcv)
+        print(
+            f"Fetched {len(ohlcv)} candles, total so far: {len(all_ohlcv)}", all_ohlcv
+        )
         since_copy = ohlcv[-1][0] + 1
- 
+
         if ohlcv[-1][0] >= exchange.milliseconds():
             break
- 
+
     df = pd.DataFrame(
-        all_ohlcv,
-        columns=["timestamp", "open", "high", "low", "close", "volume"]
+        all_ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"]
     )
- 
+
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
- 
+
     return {
         "symbol": target_symbol,
         "timeframe": timeframe,
@@ -574,15 +606,16 @@ async def get_historical_data(
 
 async def get_volatility_data(symbol: str, user, db):
 
-
     keys = await get_keys("coinbase", user.id, db)
 
-    exchange = ccxt.coinbaseexchange({
-        "apiKey": keys["api_key"],
-        "secret": keys["api_secret"],
-        "password": keys["passphrase"],
-        "enableRateLimit": True,
-    })
+    exchange = ccxt.coinbaseexchange(
+        {
+            "apiKey": keys["api_key"],
+            "secret": keys["api_secret"],
+            "password": keys["passphrase"],
+            "enableRateLimit": True,
+        }
+    )
 
     symbol = CRYPTO_NAME_MAP.get(symbol)
 
@@ -608,26 +641,26 @@ async def get_volatility_data(symbol: str, user, db):
 
         vol = np.std(log_returns) * math.sqrt(365 * 24)
 
-        volatility_points.append({
-            "timestamp": timestamps[i],
-            "volatility": round(float(vol), 6)
-        })
+        volatility_points.append(
+            {"timestamp": timestamps[i], "volatility": round(float(vol), 6)}
+        )
 
     return {
         "symbol": symbol,
         "latest": volatility_points[-1]["volatility"],
-        "data": volatility_points
+        "data": volatility_points,
     }
 
 
-async def fetch_orderbook_async(symbol:str, user=None, db=None):
+async def fetch_orderbook_async(symbol: str, user=None, db=None):
     keys = await get_keys("coinbase", user.id, db)
 
-    exchange = ccxt.coinbaseexchange({
-        "apiKey": keys["api_key"],
-        "secret": keys["api_secret"],
-        "password": keys["passphrase"],
-        "enableRateLimit": True,
-    })
+    exchange = ccxt.coinbaseexchange(
+        {
+            "apiKey": keys["api_key"],
+            "secret": keys["api_secret"],
+            "password": keys["passphrase"],
+            "enableRateLimit": True,
+        }
+    )
     return exchange
-
