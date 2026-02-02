@@ -37,8 +37,9 @@ TIMEFRAME_MAP = settings.TIMEFRAME_MAP
 
 
 # Webscokets for getting the data of top ten crypto currencies###
+price_store: dict[str, dict] = {}
 _shutdown_event = asyncio.Event()
-price_store = {}
+
 
 
 async def coinbase_ws_listener():
@@ -60,6 +61,7 @@ async def coinbase_ws_listener():
                     # print(data)
 
                     if data.get("type") == "ticker":
+                        data['symbol']=  data["product_id"]
                         price_store.update(data)
 
         except Exception as e:
@@ -68,6 +70,39 @@ async def coinbase_ws_listener():
 
 async def stop_coinbase_ws():
     _shutdown_event.set()
+
+
+
+async def coinbase_single_symbol_ws(symbol: str, client_ws: WebSocket):
+    last_sent = 0
+    SEND_INTERVAL = 2.5
+
+    try:
+        async with websockets.connect(COINBASE_WS_URL, ping_interval=20) as cb_ws:
+            await cb_ws.send(json.dumps({
+                "type": "subscribe",
+                "channels": [{
+                    "name": "ticker",
+                    "product_ids": [symbol],
+                }],
+            }))
+
+            async for msg in cb_ws:
+                data = json.loads(msg)
+
+                if data.get("type") != "ticker":
+                    continue
+
+                now = asyncio.get_event_loop().time()
+
+                if now - last_sent >= SEND_INTERVAL:
+                    data["symbol"] = data["product_id"]
+                    await client_ws.send_json(data)
+                    last_sent = now
+
+    except Exception as e:
+        logger.error(f"Coinbase WS error ({symbol}): {e}")
+
 
 
 @router.websocket("/ws/top10")
@@ -139,3 +174,23 @@ async def user_orderbook_stream(
 
     finally:
         await websocket.close()
+
+
+@router.websocket("/ws/price/{symbol}")
+async def single_coin_stream(ws: WebSocket, symbol: str):
+    await ws.accept()
+    symbol = symbol.upper()
+
+    logger.info(f"Client connected for {symbol}")
+
+    try:
+        await coinbase_single_symbol_ws(symbol, ws)
+
+    except WebSocketDisconnect:
+        logger.info(f"Client disconnected ({symbol})")
+
+    except Exception as e:
+        logger.error(f"WS error ({symbol}): {e}")
+
+    finally:
+        await ws.close()
