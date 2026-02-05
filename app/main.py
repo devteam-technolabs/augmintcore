@@ -6,7 +6,9 @@ import asyncio
 import inspect
 import logging
 import time
+import os
 
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -19,6 +21,7 @@ from app.api.payment_routes import router as payment_router
 from app.api.router import router as api_router
 from app.api.websocket_routers import coinbase_ws_listener
 from app.api.websocket_routers import router as websocket_router
+from app.api.settings_routers import settings_router
 from app.core import events
 from app.core.config import get_settings
 from app.core.exception_handlers import (
@@ -55,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(exchange_routers, prefix="/api")
     app.include_router(websocket_router, prefix="/api")
     app.include_router(coingecko_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api/v1")
 
     # Startup and shutdown events
     async def _on_startup() -> None:
@@ -107,6 +111,23 @@ def create_app() -> FastAPI:
 
     app.add_event_handler("startup", _on_startup)
     app.add_event_handler("shutdown", _on_shutdown)
+
+    # MEDIA DIRECTORY SETUP
+    media_path = os.path.join(os.getcwd(), "media")
+
+    # Create media directory if not exists
+    if not os.path.exists(media_path):
+        os.makedirs(media_path)
+        print("Media directory created at:", media_path)
+
+    # Mount media directory
+    app.mount(
+        "/media",
+        StaticFiles(directory=media_path),
+        name="media"
+    )
+
+
     return app
 
 

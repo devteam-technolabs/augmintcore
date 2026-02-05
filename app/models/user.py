@@ -13,7 +13,6 @@ from app.db.base import Base
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
 class User(Base):
     __tablename__ = "users"
 
@@ -21,6 +20,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=True)
+    profile_image = Column(Text, nullable=True)
     stripe_customer_id = Column(String(255), nullable=True)
     phone_number = Column(String(20), nullable=True, unique=True)
     country_code = Column(String(10), nullable=True)
