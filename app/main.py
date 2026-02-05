@@ -5,12 +5,12 @@
 import asyncio
 import inspect
 import logging
-import time
 import os
+import time
 
-from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.authentication import AuthenticationError
@@ -19,9 +19,9 @@ from app.api.coingecko_router import router as coingecko_router
 from app.api.exchange_routers import router as exchange_routers
 from app.api.payment_routes import router as payment_router
 from app.api.router import router as api_router
+from app.api.settings_routers import settings_router
 from app.api.websocket_routers import coinbase_ws_listener
 from app.api.websocket_routers import router as websocket_router
-from app.api.settings_routers import settings_router
 from app.core import events
 from app.core.config import get_settings
 from app.core.exception_handlers import (
@@ -121,12 +121,7 @@ def create_app() -> FastAPI:
         print("Media directory created at:", media_path)
 
     # Mount media directory
-    app.mount(
-        "/media",
-        StaticFiles(directory=media_path),
-        name="media"
-    )
-
+    app.mount("/media", StaticFiles(directory=media_path), name="media")
 
     return app
 

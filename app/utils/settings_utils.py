@@ -1,5 +1,6 @@
 from app.core.config import get_settings
 
+
 def get_absolute_media_url(request, file_path: str):
     """
     Returns full URL based on environment.

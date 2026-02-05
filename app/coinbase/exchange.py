@@ -63,13 +63,15 @@ def clean_private_key(pem: str) -> str:
 async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) -> bool:
     exchange = None
     private_key = clean_private_key(api_secret)
-    
+
     try:
-        exchange = ccxt.coinbaseadvanced({
-            "apiKey": api_key.strip(),
-            "secret": private_key,     # raw secret
-            "enableRateLimit": True,
-        })
+        exchange = ccxt.coinbaseadvanced(
+            {
+                "apiKey": api_key.strip(),
+                "secret": private_key,  # raw secret
+                "enableRateLimit": True,
+            }
+        )
         await exchange.fetch_balance()
         return exchange
 
@@ -83,14 +85,14 @@ async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) 
     exchange = None
     try:
 
-
-        exchange = ccxt.coinbaseexchange({
-            "apiKey": api_key.strip(),
-            "secret": api_secret.strip(),         
-            "password": passphrase.strip(),     
-            "enableRateLimit": True,
-        })
-
+        exchange = ccxt.coinbaseexchange(
+            {
+                "apiKey": api_key.strip(),
+                "secret": api_secret.strip(),
+                "password": passphrase.strip(),
+                "enableRateLimit": True,
+            }
+        )
 
         exchange.set_sandbox_mode(True)
 
@@ -111,7 +113,8 @@ async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) 
                 await exchange.close()
             except:
                 pass
-            
+
+
 async def safe_decrypt(value: str | None) -> str | None:
     if not value:
         return None

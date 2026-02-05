@@ -41,7 +41,6 @@ price_store: dict[str, dict] = {}
 _shutdown_event = asyncio.Event()
 
 
-
 async def coinbase_ws_listener():
     print("coinbase listener started")
     while not _shutdown_event.is_set():
@@ -61,7 +60,7 @@ async def coinbase_ws_listener():
                     # print(data)
 
                     if data.get("type") == "ticker":
-                        data['symbol']=  data["product_id"]
+                        data["symbol"] = data["product_id"]
                         price_store.update(data)
 
         except Exception as e:
@@ -72,20 +71,25 @@ async def stop_coinbase_ws():
     _shutdown_event.set()
 
 
-
 async def coinbase_single_symbol_ws(symbol: str, client_ws: WebSocket):
     last_sent = 0
     SEND_INTERVAL = 2.5
 
     try:
         async with websockets.connect(COINBASE_WS_URL, ping_interval=20) as cb_ws:
-            await cb_ws.send(json.dumps({
-                "type": "subscribe",
-                "channels": [{
-                    "name": "ticker",
-                    "product_ids": [symbol],
-                }],
-            }))
+            await cb_ws.send(
+                json.dumps(
+                    {
+                        "type": "subscribe",
+                        "channels": [
+                            {
+                                "name": "ticker",
+                                "product_ids": [symbol],
+                            }
+                        ],
+                    }
+                )
+            )
 
             async for msg in cb_ws:
                 data = json.loads(msg)
@@ -102,7 +106,6 @@ async def coinbase_single_symbol_ws(symbol: str, client_ws: WebSocket):
 
     except Exception as e:
         logger.error(f"Coinbase WS error ({symbol}): {e}")
-
 
 
 @router.websocket("/ws/top10")

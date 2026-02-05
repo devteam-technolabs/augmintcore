@@ -136,10 +136,6 @@
 # # # asyncio.run(load_user_portfolio())
 
 
-
-
-
-
 # from fastapi import FastAPI, WebSocket
 # import ccxt
 # import pandas as pd
@@ -150,9 +146,9 @@
 # import threading
 # from datetime import datetime, timedelta
 # from fastapi import HTTPException
- 
+
 # app = FastAPI(title="Crypto Trading Backend")
- 
+
 # # ======================
 # # CCXT COINBASE CONFIG
 # # ======================
@@ -162,13 +158,13 @@
 #     "password": "5gzc1ji04g2v",
 #     "enableRateLimit": True,
 # })
- 
+
 # # Sandbox mode (IMPORTANT for testing)
 # # exchange.set_sandbox_mode(True)
- 
+
 # SYMBOL = "XRP/USD"
- 
- 
+
+
 # TIMEFRAME_RULES = {
 #     "1m":  {"tf": "1m",  "max_days": 30},
 #     "15m": {"tf": "15m", "max_days": 90},
@@ -176,14 +172,14 @@
 #     "1d":  {"tf": "1d",  "max_days": 365},
 #     "1w":  {"tf": "1w",  "max_days": 1095},
 # }
- 
+
 # PERIOD_MAP = {
 #     "1m": 30,
 #     "3m": 90,
 #     "6m": 180,
 #     "1y": 365,
 # }
- 
+
 # # @app.get("/history")
 # async def get_historical_data(
 #     symbol: str = SYMBOL,
@@ -192,24 +188,24 @@
 # ):
 #     if timeframe not in TIMEFRAME_RULES:
 #         raise HTTPException(400, "Invalid timeframe")
- 
+
 #     if period not in PERIOD_MAP:
 #         raise HTTPException(400, "Invalid period")
- 
+
 #     tf_rule = TIMEFRAME_RULES[timeframe]
 #     requested_days = PERIOD_MAP[period]
- 
+
 #     # Enforce safety limits
 #     days = min(requested_days, tf_rule["max_days"])
- 
+
 #     since = int(
 #         (datetime.utcnow() - timedelta(days=days)).timestamp() * 1000
 #     )
- 
+
 #     all_ohlcv = []
 #     limit = 300
 #     since_copy = since
- 
+
 #     while True:
 #         ohlcv = exchange.fetch_ohlcv(
 #             symbol,
@@ -217,24 +213,24 @@
 #             since=since_copy,
 #             limit=limit
 #         )
- 
+
 #         if not ohlcv:
 #             break
- 
+
 #         all_ohlcv.extend(ohlcv)
 #         print(f"Fetched {len(ohlcv)} candles, total so far: {len(all_ohlcv)}", all_ohlcv)
 #         since_copy = ohlcv[-1][0] + 1
- 
+
 #         if ohlcv[-1][0] >= exchange.milliseconds():
 #             break
- 
+
 #     df = pd.DataFrame(
 #         all_ohlcv,
 #         columns=["timestamp", "open", "high", "low", "close", "volume"]
 #     )
- 
+
 #     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
- 
+
 #     return {
 #         "symbol": symbol,
 #         "timeframe": timeframe,
@@ -248,19 +244,16 @@
 
 import asyncio
 import json
+
+import uvicorn
 import websockets
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 
 COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
 
 # FIXED ORDERBOOK STORAGE
-orderbook = {
-    "bids": {},
-    "asks": {},
-    "last_trade": None
-}
+orderbook = {"bids": {}, "asks": {}, "last_trade": None}
 
 app = FastAPI()
 
@@ -270,6 +263,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 def update_book(side, price, size):
     p = float(price)
@@ -290,8 +284,8 @@ async def coinbase_orderbook_ws(product_id="BTC-USD"):
         "type": "subscribe",
         "channels": [
             {"name": "level2", "product_ids": [product_id]},
-            {"name": "matches", "product_ids": [product_id]}
-        ]
+            {"name": "matches", "product_ids": [product_id]},
+        ],
     }
 
     while True:
@@ -306,8 +300,12 @@ async def coinbase_orderbook_ws(product_id="BTC-USD"):
 
                     # SNAPSHOT (full book)
                     if data.get("type") == "snapshot":
-                        orderbook["bids"] = {float(p): float(s) for p, s in data["bids"]}
-                        orderbook["asks"] = {float(p): float(s) for p, s in data["asks"]}
+                        orderbook["bids"] = {
+                            float(p): float(s) for p, s in data["bids"]
+                        }
+                        orderbook["asks"] = {
+                            float(p): float(s) for p, s in data["asks"]
+                        }
 
                     # ORDER UPDATES
                     elif data.get("type") == "l2update":
@@ -320,7 +318,7 @@ async def coinbase_orderbook_ws(product_id="BTC-USD"):
                             "price": data["price"],
                             "size": data["size"],
                             "side": data["side"],
-                            "time": data["time"]
+                            "time": data["time"],
                         }
 
         except Exception as e:
@@ -336,7 +334,7 @@ async def get_orderbook():
     return {
         "bids": [{"price": p, "size": s} for p, s in bids],
         "asks": [{"price": p, "size": s} for p, s in asks],
-        "last_trade": orderbook["last_trade"]
+        "last_trade": orderbook["last_trade"],
     }
 
 

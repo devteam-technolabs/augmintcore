@@ -1,8 +1,11 @@
 import os
-from fastapi import UploadFile, HTTPException
+
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.future import select
-from app.models.user import User, Address
+
+from app.models.user import Address, User
 from app.utils.settings_utils import get_absolute_media_url
+
 
 async def get_user_profile(user: User, request):
     return {
@@ -11,6 +14,7 @@ async def get_user_profile(user: User, request):
         "email": user.email,
         "phone_number": user.phone_number,
     }
+
 
 async def update_user_profile(db, user: User, data, image: UploadFile, request):
 
