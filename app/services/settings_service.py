@@ -37,6 +37,9 @@ async def update_user_profile(db, user: User, data, image: UploadFile, request):
 
         user.phone_number = data.phone_number
 
+        if data.country_code is not None:
+            user.country_code = data.country_code
+
     # Update Full Name
     if data.full_name:
         user.full_name = data.full_name

@@ -15,6 +15,7 @@ class UserUpdateRequest(BaseModel):
     full_name: Optional[str]
     email: Optional[str]
     phone_number: Optional[str]
+    country_code: Optional[str] = None
 
 
 class AddressResponse(BaseModel):
