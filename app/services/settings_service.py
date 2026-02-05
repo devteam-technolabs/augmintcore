@@ -3,8 +3,8 @@ import os
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.future import select
 
-from app.models.user import Address, User
-from app.utils.settings_utils import get_absolute_media_url
+from app.models.user import Address, User, UserExchange
+from app.utils.settings_utils import get_absolute_media_url, mask_secret
 
 
 async def get_user_profile(user: User, request):
@@ -13,6 +13,7 @@ async def get_user_profile(user: User, request):
         "full_name": user.full_name,
         "email": user.email,
         "phone_number": user.phone_number,
+        "country_code": user.country_code,
     }
 
 
@@ -71,3 +72,26 @@ async def update_user_address(db, address, data):
     await db.commit()
     await db.refresh(address)
     return address
+
+
+async def list_user_exchanges(db, user_id: int):
+    result = await db.execute(
+        select(UserExchange).where(UserExchange.user_id == user_id)
+    )
+    exchanges = result.scalars().all()
+
+    response = []
+
+    for ex in exchanges:
+        response.append(
+            {
+                "id": ex.id,
+                "exchange_name": ex.exchange_name,
+                "api_key": mask_secret(ex.api_key),
+                "api_secret": mask_secret(ex.api_secret),
+                "passphrase": mask_secret(ex.passphrase),
+                "created_at": ex.created_at,
+            }
+        )
+
+    return response

@@ -151,7 +151,7 @@ class UserExchange(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
-    exchange_name = Column(String(50), nullable=False)  # "coinbase"
+    exchange_name = Column(String(50), nullable=False)
     api_key = Column(Text, nullable=False)
     api_secret = Column(Text, nullable=False)
     passphrase = Column(Text, nullable=True)

@@ -23,3 +23,22 @@ def get_absolute_media_url(request, file_path: str):
 
     # Development: Local Server
     return str(request.base_url) + file_path
+
+
+def mask_secret(value: str, visible_chars: int = 4) -> str:
+    """
+    Masks a secret value.
+
+    Example:
+    1234567890 -> 1234******
+    abcd -> abcd****
+    """
+    if not value:
+        return ""
+
+    value = str(value)
+
+    if len(value) <= visible_chars:
+        return "*" * len(value)
+
+    return value[:visible_chars] + "*" * (len(value) - visible_chars)

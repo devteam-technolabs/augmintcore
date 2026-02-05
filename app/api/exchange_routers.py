@@ -24,6 +24,7 @@ from app.schemas.user import UserResponse
 from app.security.kms_service import kms_service
 from app.services.auth_service import create_access_token, create_refresh_token
 from app.services.secret_manager_service import secrets_manager_service
+from app.utils.exchange_utils import get_exchange_by_str
 
 router = APIRouter(prefix="/exchange", tags=["Exchange"])
 
@@ -48,12 +49,19 @@ async def connect_exchange(
     print("5")
     refresh = create_refresh_token({"user_id": user.id})
 
+    exchange = get_exchange_by_str(data.exchange_name.lower())
+
+    if not exchange:
+        raise HTTPException(status_code=400, detail="Unsupported exchange")
+
+    exchange_name = exchange["exchange_str"]
+
     # 2. Check duplicate
     print("6")
     exists = await db.execute(
         select(UserExchange).where(
             UserExchange.user_id == user.id,
-            UserExchange.exchange_name == data.exchange_name.lower(),
+            UserExchange.exchange_name == exchange_name,
         )
     )
     print("7")
@@ -85,7 +93,7 @@ async def connect_exchange(
     try:
         secret_arn = await secrets_manager_service.store_exchange_credentials(
             user_id=user.id,
-            exchange_name=data.exchange_name.lower(),
+            exchange_name=exchange_name,
             api_key=data.api_key,
             api_secret=data.api_secret,
             passphrase=data.passphrase,
@@ -101,7 +109,7 @@ async def connect_exchange(
     # Store encrypted values in DB as backup/reference
     user_exchange = UserExchange(
         user_id=user.id,
-        exchange_name=data.exchange_name.lower(),
+        exchange_name=exchange_name,
         api_key=await kms_service.encrypt(data.api_key),
         api_secret=await kms_service.encrypt(data.api_secret),
         passphrase=await kms_service.encrypt(data.passphrase),

@@ -8,6 +8,7 @@ class UserDetailResponse(BaseModel):
     full_name: Optional[str]
     email: str
     phone_number: Optional[str]
+    country_code: Optional[str]
 
 
 class UserUpdateRequest(BaseModel):

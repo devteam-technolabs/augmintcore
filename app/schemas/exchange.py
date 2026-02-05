@@ -1,4 +1,5 @@
-from typing import Optional
+from datetime import datetime
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -28,3 +29,17 @@ class CCTXResponse(BaseModel):
     status_code: Optional[int] = None
     data: Optional[list] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserExchangeResponse(BaseModel):
+    id: int
+    exchange_name: str
+    api_key: Optional[str]
+    api_secret: Optional[str]
+    passphrase: Optional[str]
+    created_at: datetime
+
+
+class UserExchangeListResponse(BaseModel):
+    success: bool
+    data: List[UserExchangeResponse]

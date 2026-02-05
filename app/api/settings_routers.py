@@ -9,10 +9,12 @@ from app.constants.accordion_data import (
     trading_strategies_data,
 )
 from app.db.session import get_async_session
+from app.schemas.exchange import UserExchangeListResponse
 from app.schemas.settings_schema import AddressUpdateRequest, UserUpdateRequest
 from app.services.settings_service import (
     get_user_address,
     get_user_profile,
+    list_user_exchanges,
     update_user_address,
     update_user_profile,
 )
@@ -83,3 +85,16 @@ async def address_update(
     updated = await update_user_address(db, address, payload)
 
     return {"success": True, "message": "Address updated successfully", "data": updated}
+
+
+@settings_router.get("/get-all-exchange-info", response_model=UserExchangeListResponse)
+async def get_user_exchanges(
+    user=Depends(auth_user.get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    data = await list_user_exchanges(db, user.id)
+
+    return {
+        "success": True,
+        "data": data,
+    }
