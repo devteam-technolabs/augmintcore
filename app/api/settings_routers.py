@@ -7,6 +7,7 @@ from app.constants.accordion_data import (
     market_analysis_data,
     security_data,
     trading_strategies_data,
+    api_key_management_data,
 )
 from app.db.session import get_async_session
 from app.schemas.exchange import UserExchangeListResponse
@@ -40,6 +41,10 @@ async def get_market_analysis_data():
 @settings_router.get("/security-data", status_code=status.HTTP_200_OK)
 async def get_security_data():
     return {"success": True, "data": security_data}
+
+@settings_router.get("/api-key-management-data", status_code=status.HTTP_200_OK)
+async def get_api_key_management_data():
+    return {"success": True, "data": api_key_management_data}
 
 
 @settings_router.get("/get-user-profile")
