@@ -17,7 +17,7 @@ from fastapi import Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
+from app.coinbase.coinbase_cctx import get_working_coinbase_exchange
 from app.auth.user import auth_user
 
 # -----------------------------------------
@@ -60,20 +60,25 @@ def clean_private_key(pem: str) -> str:
     return pem.replace("\\n", "\n").strip()
 
 
+
+
+
 async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) -> bool:
     exchange = None
     private_key = clean_private_key(api_secret)
 
     try:
-        exchange = ccxt.coinbaseadvanced(
-            {
-                "apiKey": api_key.strip(),
-                "secret": private_key,  # raw secret
-                "enableRateLimit": True,
-            }
-        )
+        print("Trying Coinbase Advanced connection")
+        exchange = ccxt.coinbaseadvanced({
+            "apiKey": api_key,
+            "secret": private_key,     # raw secret
+            "enableRateLimit": True,
+        })
+        exchange.options['adjustForTimeDifference'] = True  
+       
         await exchange.fetch_balance()
         return exchange
+    
 
     except Exception as e:
         if exchange:
@@ -260,8 +265,17 @@ async def user_portfolio_data(exchange_name: str, user, db):
         # ✅ Load markets once
         await exchange.load_markets()
 
-        # 1️⃣ Fetch balances
-        balance = await exchange.fetch_balance()
+        # 1️⃣ Fetch balances (Retry mechanism for robust auth)
+        balance = None
+        for i in range(2):
+            try:
+                balance = await exchange.fetch_balance()
+                break
+            except (ccxt.AuthenticationError, ccxt.ExchangeError) as e:
+                if i == 0:
+                    await asyncio.sleep(1.0)
+                    continue
+                raise e
 
         assets = []
         total_usd_value = 0.0
@@ -347,8 +361,17 @@ async def get_total_coin_value(exchange_name: str, user, db):
 
         await exchange.load_markets()
 
-        # Fetch balances
-        balance = await exchange.fetch_balance()
+        # Fetch balances (Retry wrapper)
+        balance = None
+        for i in range(2):
+            try:
+                balance = await exchange.fetch_balance()
+                break
+            except (ccxt.AuthenticationError, ccxt.ExchangeError) as e:
+                if i == 0:
+                    await asyncio.sleep(1.0)
+                    continue
+                raise e
         tickers = await exchange.fetch_tickers()
 
         total_usd_value = 0.0
@@ -360,10 +383,10 @@ async def get_total_coin_value(exchange_name: str, user, db):
 
             currency_count += 1
 
-            if currency == "USD":
+            if currency == "USDC":
                 total_usd_value += float(amount)
             else:
-                pair = f"{currency}/USD"
+                pair = f"{currency}/USDC"
                 ticker = tickers.get(pair)
 
                 if ticker and ticker.get("last"):
@@ -382,67 +405,232 @@ async def get_total_coin_value(exchange_name: str, user, db):
 
 async def get_total_account_value(exchange_name: str, user, db):
     exchange = None
+
     try:
-        # 🔑 Get decrypted keys from DB
         keys = await get_keys(exchange_name, user.id, db)
+        print("keys", keys)
+
         api_key = keys["api_key"]
         api_secret = keys["api_secret"]
         passphrase = keys.get("passphrase")
 
-        # 🔌 Coinbase Exchange
-        exchange = ccxt.coinbaseexchange(
-            {
+        exchange = await get_working_coinbase_exchange(
+            api_key,
+            api_secret,
+            passphrase,
+        )
+
+        if not exchange:
+            raise RuntimeError("No valid Coinbase exchange found")
+
+        exchange.options['adjustForTimeDifference'] = True  
+
+        
+        if hasattr(exchange, '_cached_validation_balance'):
+            balance = exchange._cached_validation_balance
+            print("🔄 Using cached authentication balance…", balance)
+        else:
+            balance = await exchange.fetch_balance()
+            print("🔄 Testing authentication (fetch_balance)…", balance)
+
+        return balance
+
+    except Exception as e:
+        
+        print(f"❌ Failed to fetch account value: {e}")
+        raise
+
+    finally:
+        
+        if exchange:
+            await exchange.close()
+
+
+async def buy_sell_order_execution(
+    symbol: str,
+    side: str,                
+    amount: float,             
+    order_type: str,           
+    user,
+    db,
+    exchange_name: str,
+    price: float | None = None ,
+    exchange = None):
+
+    try:
+        keys = await get_keys(exchange_name, user.id, db)
+
+        api_key = keys["api_key"]
+        api_secret = keys["api_secret"]
+        passphrase = keys.get("passphrase")
+
+        # Validate keys first
+        val_exchange = await get_working_coinbase_exchange(
+            api_key,
+            api_secret,
+            passphrase,
+        )
+
+        if not val_exchange:
+            raise RuntimeError("No valid Coinbase exchange found")
+
+        # Capture ID and close validation connection
+        exchange_id = val_exchange.id
+        await val_exchange.close()
+
+        # Instantiate fresh exchange strictly for execution
+        if exchange_id == "coinbaseadvanced":
+            exchange = ccxt.coinbaseadvanced({
+                "apiKey": api_key,
+                "secret": clean_private_key(api_secret),
+                "enableRateLimit": True,
+            })
+            exchange.options["adjustForTimeDifference"] = True
+        else:
+            exchange = ccxt.coinbaseexchange({
                 "apiKey": api_key,
                 "secret": api_secret,
                 "password": passphrase,
                 "enableRateLimit": True,
-            }
-        )
+            })
+            exchange.set_sandbox_mode(True)
+       
 
-        exchange.set_sandbox_mode(True)  # ✅ Sandbox safe
+        # --- Safety checks ---
+        side = side.lower()
+        order_type = order_type.lower()
 
-        # 📦 Fetch balances
-        balance = await exchange.fetch_balance()
+        if side not in ("buy", "sell"):
+            raise ValueError("side must be 'buy' or 'sell'")
 
-        # 📈 Fetch prices once
-        tickers = await exchange.fetch_tickers()
+        if order_type not in ("market", "limit"):
+            raise ValueError("order_type must be 'market' or 'limit'")
 
-        total_usd = 0.0
-        assets = []
+        if order_type == "limit" and price is None:
+            raise ValueError("price is required for limit orders")
 
-        for asset, values in balance["total"].items():
-            if not values or values <= 0:
-                continue
+        # --- Load markets (important for precision) ---
+        await exchange.load_markets()
 
-            usd_price = 1.0 if asset == "USD" else None
-            usd_value = None
+        # 1. Fetch Ticker (Public) and Prepare Params
+        # We do this first to calculate quote_size if needed
+        req_params = {}
+        # Coinbase Advanced Trade requires product_id sometimes
+        try:
+            market = exchange.market(symbol)
+            product_id = market['id']  # e.g. "BTC-USD" 
+            req_params["product_id"] = product_id
+        except:
+             # Fallback if market not found (shouldn't happen after load_markets)
+             pass
 
-            if asset != "USD":
-                pair = f"{asset}/USD"
-                ticker = tickers.get(pair)
-                if ticker and ticker.get("last"):
-                    usd_price = float(ticker["last"])
-                    usd_value = usd_price * values
-            else:
-                usd_value = values
+        if order_type == "market" and side == "buy":
+             # Fix: "unknown field base_size" -> Use 'quote_size' for Market Buys
+             ticker = await exchange.fetch_ticker(symbol)
+             current_price = ticker['last']
+             estimated_cost = float(amount) * float(current_price)
+             
+             # round to 2 decimals for USD
+             # req_params["quote_size"] = f"{estimated_cost:.2f}" # Rejected by API
+             
+             # We will pass 'estimated_cost' as the amount to create_order
+             # which CCXT usually maps to the correct quote field for market buys.
+        elif order_type == "market" and side == "sell":
+             # Market Sells use base_size
+             req_params["base_size"] = str(amount)
 
-            if usd_value:
-                total_usd += usd_value
+        # 2. Safety Delay & Private Call 1 (Fetch Accounts)
+        await asyncio.sleep(1.0)
+        
+        # Populate internal account cache (Critical for "account not available" fix)
+        # Wrap in retry to avoid noisy 401s
+        for i in range(2):
+            try:
+                await exchange.fetch_accounts()
+                break
+            except (ccxt.AuthenticationError, ccxt.ExchangeError) as e:
+                # print(f"⚠️ Fetch accounts attempt {i+1} failed: {e}")
+                if i == 0:
+                    await asyncio.sleep(1.0)
+                    continue
+                # If it fails twice, we log but carry on, as it might not be strictly blocked if user provided IDs
+                print(f"⚠️ Failed to pre-fetch accounts after retries: {e}")
 
-            assets.append(
-                {
-                    "asset": asset,
-                    "amount": float(values),
-                    "usd_price": usd_price,
-                    "usd_value": round(usd_value, 2) if usd_value else None,
-                }
-            )
+        # 3. Safety Delay & Private Call 2 (Create Order)
+        # Sleep AGAIN to ensure 'fetch_accounts' nonce doesn't collide with 'create_order' nonce
+        await asyncio.sleep(1.0)
+
+        # Retry wrapper for execution
+        for i in range(2):
+            try:
+                if order_type == "market":
+                    exchange.options["createMarketBuyOrderRequiresPrice"] = False
+                    
+                    # Based on user's working example:
+                    # order = await exchange.create_order(
+                    #     symbol="LTC/USDC", type="market", side="buy",
+                    #     amount=1, params={"cost": 1.6}
+                    # )
+                    
+                    if side == "buy":
+                        # For Market Buy, we must send "cost" (quote amount)
+                        # We calculated 'estimated_cost' above.
+                        # CCXT usually maps the main 'amount' argument to base_size.
+                        # But for Coinbase Advanced Market Buy, we want to specify cost.
+                        
+                        # Use generic create_order to have full control
+                        order = await exchange.create_order(
+                            symbol=symbol,
+                            type="market",
+                            side="buy",
+                            amount=estimated_cost, # CCXT often uses this as cost if 'market' buy
+                            params=req_params # Contains 'product_id'
+                        )
+                    else:
+                        # For Market Sell, we send base_size (which is the main 'amount')
+                        order = await exchange.create_market_order(
+                            symbol=symbol,
+                            side=side,
+                            amount=amount, 
+                            params=req_params
+                        )
+                else:
+                    order = await exchange.create_limit_order(
+                        symbol=symbol,
+                        side=side,
+                        amount=amount,
+                        price=price,
+                    )
+                
+                # If successful, break
+                break
+            
+            # FAIL FAST errors (Don't retry)
+            except (ccxt.InsufficientFunds, ccxt.InvalidOrder, ccxt.OrderNotFound, ccxt.BadSymbol) as e:
+                raise e
+
+            # RETRYABLE errors
+            except (ccxt.AuthenticationError, ccxt.ExchangeError, ccxt.NetworkError) as e:
+                if i == 0:
+                    print(f"⚠️ Order attempt 1 failed ({e}). Retrying in 1s...")
+                    await asyncio.sleep(1.0)
+                    continue
+                raise e
 
         return {
-            "total_account_value": round(total_usd, 2),
-            "total_assets": len(assets),
-            "assets": assets,
+            "status": "success",
+            "order_id": order.get("id"),
+            "symbol": symbol,
+            "side": side,
+            "type": order_type,
+            "amount": amount,
+            "price": price,
+            "raw": order,
         }
+
+    except Exception as e:
+        print(f"❌ Order execution failed: {e}")
+        raise
 
     finally:
         if exchange:
