@@ -31,7 +31,7 @@ class AppSettings(BaseSettings):
     # --- Security ---
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 300  # 30 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30000  # 30 hours
 
     # --- CORS ---
     CORS_ORIGINS: List[str] = Field(default_factory=list)

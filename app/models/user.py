@@ -5,7 +5,7 @@ from email.policy import default
 from passlib.context import CryptContext
 from sqlalchemy import Boolean, Column, DateTime
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Integer, String, Text, Float
 from sqlalchemy.orm import relationship
 
 # Import Base from your shared base file, not from declarative_base()
@@ -58,6 +58,12 @@ class User(Base):
     )
     exchange_accounts = relationship(
         "UserExchange",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    exchange_orders = relationship(
+        "ExchangeOrder",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -155,6 +161,32 @@ class UserExchange(Base):
     api_key = Column(Text, nullable=False)
     api_secret = Column(Text, nullable=False)
     passphrase = Column(Text, nullable=True)
-    secret_arn = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="exchange_accounts")
+
+
+class ExchangeOrder(Base):
+    __tablename__ = "exchange_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    exchange_name = Column(String(50), nullable=False)
+    order_id = Column(String(255), nullable=False)
+    client_order_id = Column(String(255), nullable=True)
+    
+    symbol = Column(String(20), nullable=False)
+    side = Column(String(10), nullable=False)
+    order_type = Column(String(20), nullable=False)
+    
+    quantity = Column(Float, nullable=True) # Was 'amount'
+    price = Column(Float, nullable=True) # User requested price
+    current_price = Column(Float, nullable=True) # Execution price / market price
+    cost = Column(Float, nullable=True)
+    
+    status = Column(String(50), nullable=True)
+    raw_response = Column(Text, nullable=True) 
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="exchange_orders")
