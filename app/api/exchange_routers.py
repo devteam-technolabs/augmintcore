@@ -2,6 +2,7 @@ import ccxt.async_support as ccxt
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from app.schemas.buy_sell import BuySellOrderRequest
 
 from app.auth.user import auth_user
 from app.coinbase.exchange import (
@@ -12,6 +13,7 @@ from app.coinbase.exchange import (
     get_total_coin_value,
     user_portfolio_data,
     validate_coinbase_api,
+    buy_sell_order_execution
 )
 from app.db.session import get_async_session
 from app.models.user import User, UserExchange
@@ -213,6 +215,7 @@ async def total_coin_value(
 
     # 2️⃣ Get total value
     try:
+        print("Fetching total coin value...")
         data = await get_total_coin_value(exchange_name, user, db)
 
         return {
@@ -247,6 +250,45 @@ async def total_account_value(
         "status_code": 200,
         "data": data,
     }
+
+
+@router.post("/buy-sell-order")
+async def buy_sell_order(
+    payload: BuySellOrderRequest,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user),
+):
+
+    result = await db.execute(select(User).where(User.id == current_user.id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        data = await buy_sell_order_execution(
+            exchange_name=payload.exchange_name,
+            symbol=payload.symbol,
+            side=payload.side,
+            order_type=payload.order_type,
+            quantity=payload.quantity, # Was amount -> now quantity used as amount for order creation
+            total_cost=payload.total_cost,
+            limit_price=payload.limit_price,
+            user=user,
+            db=db,
+        )
+
+        return {
+            "message": "Order executed successfully",
+            "status_code": 200,
+            "data": data,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
 
 
 @router.get("/portfolio/profit-loss")

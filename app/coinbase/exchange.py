@@ -24,8 +24,9 @@ from app.auth.user import auth_user
 # Local Application Imports
 # -----------------------------------------
 from app.db.session import get_async_session
-from app.models.user import User, UserExchange
+from app.models.user import User, UserExchange, ExchangeOrder
 from app.security.kms_service import kms_service
+import json
 
 TIMEFRAME_RULES = {
     "1m": {"tf": "1m", "max_days": 30},
@@ -57,7 +58,7 @@ CRYPTO_NAME_MAP = {
 
 
 def clean_private_key(pem: str) -> str:
-    return pem.replace("\\n", "\n").strip()
+    return pem.replace("\\n", "\n").replace("\r", "").strip()
 
 
 
@@ -146,7 +147,7 @@ async def get_keys(
             UserExchange.user_id == user_id, UserExchange.exchange_name == exchange_name
         )
     )
-    print(result, "gggggggggggggggggggggggggggg")
+
     ex = result.scalar_one_or_none()
 
     if not ex:
@@ -408,7 +409,6 @@ async def get_total_account_value(exchange_name: str, user, db):
 
     try:
         keys = await get_keys(exchange_name, user.id, db)
-        print("keys", keys)
 
         api_key = keys["api_key"]
         api_secret = keys["api_secret"]
@@ -448,182 +448,189 @@ async def get_total_account_value(exchange_name: str, user, db):
 
 async def buy_sell_order_execution(
     symbol: str,
-    side: str,                
-    amount: float,             
-    order_type: str,           
+    side: str,
+    quantity: float,               # base quantity (e.g. BTC)
+    order_type: str,
     user,
     db,
     exchange_name: str,
-    price: float | None = None ,
-    exchange = None):
-
+    total_cost: float | None = None,
+    exchange=None,
+    limit_price=None
+):
     try:
+        price = total_cost
+        # ─────────────────────────────────────────────
+        # 1. Load & validate exchange
+        # ─────────────────────────────────────────────
         keys = await get_keys(exchange_name, user.id, db)
+        print("keys", keys)
 
-        api_key = keys["api_key"]
-        api_secret = keys["api_secret"]
-        passphrase = keys.get("passphrase")
-
-        # Validate keys first
-        val_exchange = await get_working_coinbase_exchange(
-            api_key,
-            api_secret,
-            passphrase,
+        exchange = await get_working_coinbase_exchange(
+            keys["api_key"],
+            keys["api_secret"],
+            keys.get("passphrase", "")
         )
+        print("exchange", exchange)
 
-        if not val_exchange:
+        if not exchange:
             raise RuntimeError("No valid Coinbase exchange found")
 
-        # Capture ID and close validation connection
-        exchange_id = val_exchange.id
-        await val_exchange.close()
+        exchange.options["adjustForTimeDifference"] = True
 
-        # Instantiate fresh exchange strictly for execution
-        if exchange_id == "coinbaseadvanced":
-            exchange = ccxt.coinbaseadvanced({
-                "apiKey": api_key,
-                "secret": clean_private_key(api_secret),
-                "enableRateLimit": True,
-            })
-            exchange.options["adjustForTimeDifference"] = True
-        else:
-            exchange = ccxt.coinbaseexchange({
-                "apiKey": api_key,
-                "secret": api_secret,
-                "password": passphrase,
-                "enableRateLimit": True,
-            })
-            exchange.set_sandbox_mode(True)
-       
-
-        # --- Safety checks ---
         side = side.lower()
         order_type = order_type.lower()
 
-        if side not in ("buy", "sell"):
-            raise ValueError("side must be 'buy' or 'sell'")
+        if side not in {"buy", "sell"}:
+            raise ValueError("side must be buy or sell")
 
-        if order_type not in ("market", "limit"):
-            raise ValueError("order_type must be 'market' or 'limit'")
+        if order_type not in {"market", "limit"}:
+            raise ValueError("order_type must be market or limit")
 
         if order_type == "limit" and price is None:
-            raise ValueError("price is required for limit orders")
+            raise ValueError("price required for limit orders")
 
-        # --- Load markets (important for precision) ---
         await exchange.load_markets()
 
-        # 1. Fetch Ticker (Public) and Prepare Params
-        # We do this first to calculate quote_size if needed
-        req_params = {}
-        # Coinbase Advanced Trade requires product_id sometimes
-        try:
-            market = exchange.market(symbol)
-            product_id = market['id']  # e.g. "BTC-USD" 
-            req_params["product_id"] = product_id
-        except:
-             # Fallback if market not found (shouldn't happen after load_markets)
-             pass
+        # ─────────────────────────────────────────────
+        # 2. Fetch ticker for market orders
+        # ─────────────────────────────────────────────
+        ticker_price = None
+        if order_type == "market":
+            ticker = await exchange.fetch_ticker(symbol)
+            ticker_price = ticker["last"]
 
+        # ─────────────────────────────────────────────
+        # 3. Balance-aware USD / USDC switching
+        # ─────────────────────────────────────────────
+        balance = (
+            exchange._cached_validation_balance
+            if hasattr(exchange, "_cached_validation_balance")
+            else await exchange.fetch_balance()
+        )
+
+        base, quote = symbol.split("/")
+
+        usd_free = balance.get("USD", {}).get("free", 0)
+        usdc_free = balance.get("USDC", {}).get("free", 0)
+
+        required_cost = None
         if order_type == "market" and side == "buy":
-             # Fix: "unknown field base_size" -> Use 'quote_size' for Market Buys
-             ticker = await exchange.fetch_ticker(symbol)
-             current_price = ticker['last']
-             estimated_cost = float(amount) * float(current_price)
-             
-             # round to 2 decimals for USD
-             # req_params["quote_size"] = f"{estimated_cost:.2f}" # Rejected by API
-             
-             # We will pass 'estimated_cost' as the amount to create_order
-             # which CCXT usually maps to the correct quote field for market buys.
-        elif order_type == "market" and side == "sell":
-             # Market Sells use base_size
-             req_params["base_size"] = str(amount)
+            required_cost = quantity * ticker_price * 1.01  # 1% buffer
 
-        # 2. Safety Delay & Private Call 1 (Fetch Accounts)
-        await asyncio.sleep(1.0)
-        
-        # Populate internal account cache (Critical for "account not available" fix)
-        # Wrap in retry to avoid noisy 401s
-        for i in range(2):
-            try:
-                await exchange.fetch_accounts()
-                break
-            except (ccxt.AuthenticationError, ccxt.ExchangeError) as e:
-                # print(f"⚠️ Fetch accounts attempt {i+1} failed: {e}")
-                if i == 0:
-                    await asyncio.sleep(1.0)
-                    continue
-                # If it fails twice, we log but carry on, as it might not be strictly blocked if user provided IDs
-                print(f"⚠️ Failed to pre-fetch accounts after retries: {e}")
+            if quote == "USD" and usd_free < required_cost and usdc_free >= required_cost:
+                alt_symbol = f"{base}/USDC"
+                if alt_symbol in exchange.markets:
+                    symbol = alt_symbol
+                    quote = "USDC"
 
-        # 3. Safety Delay & Private Call 2 (Create Order)
-        # Sleep AGAIN to ensure 'fetch_accounts' nonce doesn't collide with 'create_order' nonce
-        await asyncio.sleep(1.0)
+        exchange.options["createMarketBuyOrderRequiresPrice"] = False
 
-        # Retry wrapper for execution
-        for i in range(2):
-            try:
-                if order_type == "market":
-                    exchange.options["createMarketBuyOrderRequiresPrice"] = False
-                    
-                    # Based on user's working example:
-                    # order = await exchange.create_order(
-                    #     symbol="LTC/USDC", type="market", side="buy",
-                    #     amount=1, params={"cost": 1.6}
-                    # )
-                    
-                    if side == "buy":
-                        # For Market Buy, we must send "cost" (quote amount)
-                        # We calculated 'estimated_cost' above.
-                        # CCXT usually maps the main 'amount' argument to base_size.
-                        # But for Coinbase Advanced Market Buy, we want to specify cost.
-                        
-                        # Use generic create_order to have full control
-                        order = await exchange.create_order(
-                            symbol=symbol,
-                            type="market",
-                            side="buy",
-                            amount=estimated_cost, # CCXT often uses this as cost if 'market' buy
-                            params=req_params # Contains 'product_id'
-                        )
-                    else:
-                        # For Market Sell, we send base_size (which is the main 'amount')
-                        order = await exchange.create_market_order(
-                            symbol=symbol,
-                            side=side,
-                            amount=amount, 
-                            params=req_params
-                        )
-                else:
-                    order = await exchange.create_limit_order(
-                        symbol=symbol,
-                        side=side,
-                        amount=amount,
-                        price=price,
-                    )
-                
-                # If successful, break
-                break
-            
-            # FAIL FAST errors (Don't retry)
-            except (ccxt.InsufficientFunds, ccxt.InvalidOrder, ccxt.OrderNotFound, ccxt.BadSymbol) as e:
-                raise e
+        # Force USDC for market orders
+        if exchange.id == "coinbaseadvanced" and order_type == "market":
+            base, _ = symbol.split("/")
+            usdc_symbol = f"{base}/USDC"
+            if usdc_symbol in exchange.markets:
+                symbol = usdc_symbol
 
-            # RETRYABLE errors
-            except (ccxt.AuthenticationError, ccxt.ExchangeError, ccxt.NetworkError) as e:
-                if i == 0:
-                    print(f"⚠️ Order attempt 1 failed ({e}). Retrying in 1s...")
-                    await asyncio.sleep(1.0)
-                    continue
-                raise e
+        # ─────────────────────────────────────────────
+        # 4. Create order (Coinbase-correct)
+        # ─────────────────────────────────────────────
+        params = {}
+        print(f"Creating {order_type} order: {side} {quantity} {symbol} at price {price} (ticker price: {ticker_price})")
+        if order_type == "market":
+            if side == "buy":
+                # Coinbase requires quote_size, not base_size
+                cost = quantity * ticker_price
+                cost *= 0.995  # preview safety buffer
+
+                print(
+                    f"""
+                    MARKET BUY
+                    Symbol: {symbol}
+                    Base qty: {quantity}
+                    Price: {ticker_price}
+                    Quote cost: {cost}
+                    USD free: {usd_free}
+                    USDC free: {usdc_free}
+                    """
+                                    )
+
+                order = await exchange.create_order(
+                    symbol=symbol,
+                    type=order_type,
+                    side=side,
+                    amount=quantity,           # cost amount (USDC)
+                    params={"cost": price}  # spend exactly 1 USDC
+                )
+            else:
+                # market SELL uses base quantity
+                order = await exchange.create_order(
+                    symbol=symbol,
+                    type="market",
+                    side="sell",
+                    amount=quantity
+                  
+                )
+        elif order_type == "limit":
+            if quantity is None or limit_price is None:
+                raise ValueError("quantity and limit_price required")
+
+            market = exchange.market(symbol)
+
+            min_amount = market["limits"]["amount"]["min"]
+            if quantity < min_amount:
+                raise ValueError(
+                    f"Quantity too small. Min {symbol} size is {min_amount}"
+                )
+
+            amount = float(exchange.amount_to_precision(symbol, quantity))
+            price = float(exchange.price_to_precision(symbol, limit_price))
+
+            print(
+                f"LIMIT ORDER → {side.upper()} {amount} {symbol} @ {price}"
+            )
+
+            order = await exchange.create_order(
+                symbol=symbol,
+                type="limit",
+                side=side,
+                amount=amount,   # BASE quantity
+                price=price,     # LIMIT price (NOT total_cost)
+            )
+
+
+        # ─────────────────────────────────────────────
+        # 5. Persist order
+        # ─────────────────────────────────────────────
+        new_order = ExchangeOrder(
+            user_id=user.id,
+            exchange_name=exchange_name.lower(),
+            order_id=order.get("id"),
+            client_order_id=order.get("clientOrderId"),
+            symbol=symbol,
+            side=side,
+            order_type=order_type,
+            quantity=quantity,
+            price=price,
+            current_price=ticker_price or price,
+            cost=order.get("cost"),
+            status=order.get("status", "unknown"),
+            raw_response=json.dumps(order),
+        )
+
+        db.add(new_order)
+        await db.commit()
+        await db.refresh(new_order)
 
         return {
             "status": "success",
             "order_id": order.get("id"),
+            "db_order_id": new_order.id,
             "symbol": symbol,
             "side": side,
             "type": order_type,
-            "amount": amount,
+            "quantity": quantity,
             "price": price,
             "raw": order,
         }
@@ -635,7 +642,6 @@ async def buy_sell_order_execution(
     finally:
         if exchange:
             await exchange.close()
-
 
 async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
     exchange = None
@@ -668,7 +674,7 @@ async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
                 continue
 
             # USD stays USD
-            if currency == "USD":
+            if currency == "USDC":
                 usd_value = float(qty)
                 total_portfolio_value += usd_value
 
@@ -681,7 +687,7 @@ async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
                 )
                 continue
 
-            pair = f"{currency}/USD"
+            pair = f"{currency}/USDC"
             ticker = tickers.get(pair)
             if not ticker or not ticker.get("last"):
                 continue
