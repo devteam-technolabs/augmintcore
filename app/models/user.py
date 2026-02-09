@@ -160,7 +160,8 @@ class UserExchange(Base):
     exchange_name = Column(String(50), nullable=False)
     api_key = Column(Text, nullable=False)
     api_secret = Column(Text, nullable=False)
-    passphrase = Column(Text, nullable=True)
+    passphrase = Column(Text, nullable=True)  
+    secret_arn = Column(String(255), nullable=False)  # Store KMS ARN for reference
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="exchange_accounts")
 

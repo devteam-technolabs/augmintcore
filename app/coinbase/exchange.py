@@ -76,6 +76,7 @@ async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) 
             "enableRateLimit": True,
         })
         exchange.options['adjustForTimeDifference'] = True  
+        exchange.options['createMarketBuyOrderRequiresPrice'] = False
        
         await exchange.fetch_balance()
         return exchange
