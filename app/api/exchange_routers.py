@@ -272,7 +272,8 @@ async def buy_sell_order(
             side=payload.side,
             order_type=payload.order_type,
             quantity=payload.quantity, # Was amount -> now quantity used as amount for order creation
-            price=payload.price,
+            total_cost=payload.total_cost,
+            limit_price=payload.limit_price,
             user=user,
             db=db,
         )
