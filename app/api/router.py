@@ -214,18 +214,18 @@ async def verify_mfa(
         raise HTTPException(status_code=400, detail="MFA is not enabled for this user")
 
     # Already verified?
-    if user.is_mfa_enabled:
-        access_token = create_access_token({"sub": str(user.id)})
-        refresh_token = create_refresh_token({"sub": str(user.id)})
+    # if user.is_mfa_enabled:
+    #     access_token = create_access_token({"sub": str(user.id)})
+    #     refresh_token = create_refresh_token({"sub": str(user.id)})
 
-        return {
-            "message": "MFA already verified",
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-            "user": user,
-            "status_code": 200,
-        }
+    #     return {
+    #         "message": "MFA already verified",
+    #         "access_token": access_token,
+    #         "refresh_token": refresh_token,
+    #         "token_type": "bearer",
+    #         "user": user,
+    #         "status_code": 200,
+    #     }
 
     totp = pyotp.TOTP(user.mfa_secret)
 
@@ -253,6 +253,40 @@ async def verify_mfa(
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": user,
+        "status_code": 200,
+    }
+
+@router.post("/verify-login-mfa")
+async def verify_mfa(
+    otp: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user=Security(auth_user.get_current_user),
+):
+    user = current_user
+    user_id = user.id
+    # Fetch user
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.is_mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA not enabled")
+
+    totp = pyotp.TOTP(user.mfa_secret)
+
+    if not totp.verify(otp):
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    return {
+        "message": "Login successful",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
         "status_code": 200,
     }
 
