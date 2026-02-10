@@ -257,7 +257,7 @@ async def verify_mfa(
     }
 
 @router.post("/verify-login-mfa")
-async def verify_mfa(
+async def verify_login_mfa(
     otp: str,
     db: AsyncSession = Depends(get_async_session),
     current_user=Security(auth_user.get_current_user),
