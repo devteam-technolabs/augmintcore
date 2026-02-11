@@ -2,21 +2,22 @@ import ccxt.async_support as ccxt
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.schemas.buy_sell import BuySellOrderRequest
 
 from app.auth.user import auth_user
 from app.coinbase.exchange import (
+    buy_sell_order_execution,
     get_crypt_currencies,
     get_historical_data,
+    get_historical_ohlc_data,
     get_profit_and_loss,
     get_total_account_value,
     get_total_coin_value,
     user_portfolio_data,
     validate_coinbase_api,
-    buy_sell_order_execution
 )
 from app.db.session import get_async_session
 from app.models.user import User, UserExchange
+from app.schemas.buy_sell import BuySellOrderRequest
 from app.schemas.exchange import (
     CCTXResponse,
     ExchangeConnectRequest,
@@ -271,7 +272,7 @@ async def buy_sell_order(
             symbol=payload.symbol,
             side=payload.side,
             order_type=payload.order_type,
-            quantity=payload.quantity, # Was amount -> now quantity used as amount for order creation
+            quantity=payload.quantity,  # Was amount -> now quantity used as amount for order creation
             total_cost=payload.total_cost,
             limit_price=payload.limit_price,
             user=user,
@@ -302,6 +303,7 @@ async def portfolio_profit_loss(
     )
 
 
+# this endpoint is an old endpoint which provide historical data but it is a slow api.
 @router.get("/get-historical-data")
 async def get_ohlc_data(
     timeframe,
@@ -312,4 +314,22 @@ async def get_ohlc_data(
 ):
     return await get_historical_data(
         timeframe=timeframe, period=period, user=current_user, db=db, symbol=coin_id
+    )
+
+
+# New api for historical ohlc data which is faster than the old one and provide data in ohlc format with pagination support.
+@router.get("/ohlc")
+async def get_ohlc_data(
+    coin_id: str,
+    timeframe: str,
+    before: int | None = None,
+    current_user: User = Security(auth_user.get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    return await get_historical_ohlc_data(
+        user=current_user,
+        timeframe=timeframe,
+        symbol=coin_id,
+        before=before,
+        db=db,
     )

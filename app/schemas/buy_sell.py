@@ -1,5 +1,6 @@
+from typing import Literal, Optional
+
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
 
 
 class BuySellOrderRequest(BaseModel):
@@ -8,5 +9,5 @@ class BuySellOrderRequest(BaseModel):
     side: Literal["buy", "sell"]
     order_type: Literal["market", "limit"]
     quantity: float = Field(..., gt=0, example=0.001)
-    total_cost: Optional[float] = Field(None, example=45000),
+    total_cost: Optional[float] = (Field(None, example=45000),)
     limit_price: Optional[float] = Field(None, example=45000)

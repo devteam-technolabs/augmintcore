@@ -256,6 +256,7 @@ async def verify_mfa(
         "status_code": 200,
     }
 
+
 @router.post("/verify-login-mfa")
 async def verify_login_mfa(
     otp: str,

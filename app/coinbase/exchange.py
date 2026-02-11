@@ -3,8 +3,9 @@
 # -----------------------------------------
 import asyncio
 import functools
+import json
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # -----------------------------------------
 # Third-Party Imports
@@ -17,16 +18,16 @@ from fastapi import Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.coinbase.coinbase_cctx import get_working_coinbase_exchange
+
 from app.auth.user import auth_user
+from app.coinbase.coinbase_cctx import get_working_coinbase_exchange
 
 # -----------------------------------------
 # Local Application Imports
 # -----------------------------------------
 from app.db.session import get_async_session
-from app.models.user import User, UserExchange, ExchangeOrder
+from app.models.user import ExchangeOrder, User, UserExchange
 from app.security.kms_service import kms_service
-import json
 
 TIMEFRAME_RULES = {
     "1m": {"tf": "1m", "max_days": 30},
@@ -61,26 +62,24 @@ def clean_private_key(pem: str) -> str:
     return pem.replace("\\n", "\n").replace("\r", "").strip()
 
 
-
-
-
 async def validate_coinbase_api(api_key: str, api_secret: str, passphrase: str) -> bool:
     exchange = None
     private_key = clean_private_key(api_secret)
 
     try:
         print("Trying Coinbase Advanced connection")
-        exchange = ccxt.coinbaseadvanced({
-            "apiKey": api_key,
-            "secret": private_key,     # raw secret
-            "enableRateLimit": True,
-        })
-        exchange.options['adjustForTimeDifference'] = True  
-        exchange.options['createMarketBuyOrderRequiresPrice'] = False
-       
+        exchange = ccxt.coinbaseadvanced(
+            {
+                "apiKey": api_key,
+                "secret": private_key,  # raw secret
+                "enableRateLimit": True,
+            }
+        )
+        exchange.options["adjustForTimeDifference"] = True
+        exchange.options["createMarketBuyOrderRequiresPrice"] = False
+
         await exchange.fetch_balance()
         return exchange
-    
 
     except Exception as e:
         if exchange:
@@ -424,10 +423,9 @@ async def get_total_account_value(exchange_name: str, user, db):
         if not exchange:
             raise RuntimeError("No valid Coinbase exchange found")
 
-        exchange.options['adjustForTimeDifference'] = True  
+        exchange.options["adjustForTimeDifference"] = True
 
-        
-        if hasattr(exchange, '_cached_validation_balance'):
+        if hasattr(exchange, "_cached_validation_balance"):
             balance = exchange._cached_validation_balance
             print("🔄 Using cached authentication balance…", balance)
         else:
@@ -437,12 +435,12 @@ async def get_total_account_value(exchange_name: str, user, db):
         return balance
 
     except Exception as e:
-        
+
         print(f"❌ Failed to fetch account value: {e}")
         raise
 
     finally:
-        
+
         if exchange:
             await exchange.close()
 
@@ -450,14 +448,14 @@ async def get_total_account_value(exchange_name: str, user, db):
 async def buy_sell_order_execution(
     symbol: str,
     side: str,
-    quantity: float,               # base quantity (e.g. BTC)
+    quantity: float,  # base quantity (e.g. BTC)
     order_type: str,
     user,
     db,
     exchange_name: str,
     total_cost: float | None = None,
     exchange=None,
-    limit_price=None
+    limit_price=None,
 ):
     try:
         price = total_cost
@@ -468,9 +466,7 @@ async def buy_sell_order_execution(
         print("keys", keys)
 
         exchange = await get_working_coinbase_exchange(
-            keys["api_key"],
-            keys["api_secret"],
-            keys.get("passphrase", "")
+            keys["api_key"], keys["api_secret"], keys.get("passphrase", "")
         )
         print("exchange", exchange)
 
@@ -519,7 +515,11 @@ async def buy_sell_order_execution(
         if order_type == "market" and side == "buy":
             required_cost = quantity * ticker_price * 1.01  # 1% buffer
 
-            if quote == "USD" and usd_free < required_cost and usdc_free >= required_cost:
+            if (
+                quote == "USD"
+                and usd_free < required_cost
+                and usdc_free >= required_cost
+            ):
                 alt_symbol = f"{base}/USDC"
                 if alt_symbol in exchange.markets:
                     symbol = alt_symbol
@@ -538,7 +538,9 @@ async def buy_sell_order_execution(
         # 4. Create order (Coinbase-correct)
         # ─────────────────────────────────────────────
         params = {}
-        print(f"Creating {order_type} order: {side} {quantity} {symbol} at price {price} (ticker price: {ticker_price})")
+        print(
+            f"Creating {order_type} order: {side} {quantity} {symbol} at price {price} (ticker price: {ticker_price})"
+        )
         if order_type == "market":
             if side == "buy":
                 # Coinbase requires quote_size, not base_size
@@ -555,23 +557,19 @@ async def buy_sell_order_execution(
                     USD free: {usd_free}
                     USDC free: {usdc_free}
                     """
-                                    )
+                )
 
                 order = await exchange.create_order(
                     symbol=symbol,
                     type=order_type,
                     side=side,
-                    amount=quantity,           # cost amount (USDC)
-                    params={"cost": price}  # spend exactly 1 USDC
+                    amount=quantity,  # cost amount (USDC)
+                    params={"cost": price},  # spend exactly 1 USDC
                 )
             else:
                 # market SELL uses base quantity
                 order = await exchange.create_order(
-                    symbol=symbol,
-                    type="market",
-                    side="sell",
-                    amount=quantity
-                  
+                    symbol=symbol, type="market", side="sell", amount=quantity
                 )
         elif order_type == "limit":
             if quantity is None or limit_price is None:
@@ -588,18 +586,15 @@ async def buy_sell_order_execution(
             amount = float(exchange.amount_to_precision(symbol, quantity))
             price = float(exchange.price_to_precision(symbol, limit_price))
 
-            print(
-                f"LIMIT ORDER → {side.upper()} {amount} {symbol} @ {price}"
-            )
+            print(f"LIMIT ORDER → {side.upper()} {amount} {symbol} @ {price}")
 
             order = await exchange.create_order(
                 symbol=symbol,
                 type="limit",
                 side=side,
-                amount=amount,   # BASE quantity
-                price=price,     # LIMIT price (NOT total_cost)
+                amount=amount,  # BASE quantity
+                price=price,  # LIMIT price (NOT total_cost)
             )
-
 
         # ─────────────────────────────────────────────
         # 5. Persist order
@@ -643,6 +638,7 @@ async def buy_sell_order_execution(
     finally:
         if exchange:
             await exchange.close()
+
 
 async def get_profit_and_loss(exchange_name: str, user, db: AsyncSession):
     exchange = None
@@ -797,6 +793,101 @@ async def get_historical_data(
         "period": period,
         "days_returned": days,
         "candles": df.to_dict(orient="records"),
+    }
+
+
+TIMEFRAME_CONFIG = {
+    "1m": {"days": 1, "candle_minutes": 1},
+    "15m": {"days": 3, "candle_minutes": 15},
+    "1h": {"days": 7, "candle_minutes": 60},
+    "1d": {"days": 30, "candle_minutes": 1440},
+}
+
+
+async def get_historical_ohlc_data(
+    user,
+    timeframe: str,
+    symbol: str,
+    before: int | None,
+    db: AsyncSession,
+):
+    # Validate timeframe
+    if timeframe not in TIMEFRAME_CONFIG:
+        raise HTTPException(status_code=400, detail="Invalid timeframe")
+
+    config = TIMEFRAME_CONFIG[timeframe]
+    days = config["days"]
+    candle_minutes = config["candle_minutes"]
+
+    # Convert symbol
+    target_symbol = CRYPTO_NAME_MAP.get(symbol.lower(), symbol.upper())
+
+    # Fetch user exchange keys
+    keys = await get_keys("coinbase", user.id, db)
+
+    # Create exchange client
+    exchange = ccxt.coinbaseexchange(
+        {
+            "apiKey": keys["api_key"],
+            "secret": keys["api_secret"],
+            "password": keys["passphrase"],
+            "enableRateLimit": True,
+        }
+    )
+
+    # Determine end time
+    until_timestamp = before or exchange.milliseconds()
+
+    # Calculate total candles needed
+    total_minutes = days * 24 * 60
+    total_candles = total_minutes // candle_minutes
+
+    # Coinbase limit
+    limit = min(total_candles, 300)
+
+    # Calculate start timestamp
+    since_timestamp = until_timestamp - (limit * candle_minutes * 60 * 1000)
+
+    try:
+        candles = await exchange.fetch_ohlcv(
+            target_symbol,
+            timeframe=timeframe,
+            since=since_timestamp,
+            limit=limit,
+        )
+    finally:
+        await exchange.close()
+
+    if not candles:
+        return {
+            "symbol": target_symbol,
+            "timeframe": timeframe,
+            "candles": [],
+            "next_before": None,
+        }
+
+    formatted = [
+        {
+            "timestamp": datetime.fromtimestamp(
+                c[0] / 1000, tz=timezone.utc
+            ).isoformat(),
+            "open": c[1],
+            "high": c[2],
+            "low": c[3],
+            "close": c[4],
+            "volume": c[5],
+        }
+        for c in candles
+    ]
+
+    # Pagination cursor
+    next_before = candles[0][0]
+
+    return {
+        "symbol": target_symbol,
+        "timeframe": timeframe,
+        "candles": formatted,
+        "next_before": next_before,
     }
 
 
