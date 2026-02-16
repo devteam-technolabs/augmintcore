@@ -445,6 +445,90 @@ async def get_total_account_value(exchange_name: str, user, db):
             await exchange.close()
 
 
+async def fetch_all_orders(
+    exchange_name: str,
+    symbol: str,
+    user,
+    db
+):
+    exchange = None
+
+    try: 
+        keys = await get_keys(exchange_name, user.id, db) 
+        api_key = keys["api_key"] 
+        api_secret = keys["api_secret"] 
+        passphrase = keys.get("passphrase") 
+        exchange = await get_working_coinbase_exchange( api_key, api_secret, passphrase, ) 
+        if not exchange: 
+            raise RuntimeError("No valid Coinbase exchange found") 
+        exchange.options["adjustForTimeDifference"] = True 
+        orders = await exchange.fetch_orders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
+        return orders 
+    except Exception as e: 
+        print(f"❌ Failed to fetch account value: {e}") 
+        raise 
+    finally: 
+        if exchange: 
+            await exchange.close()
+
+
+async def fetch_open_orders(
+    exchange_name: str,
+    symbol: str,
+    user,
+    db
+):
+    exchange = None
+
+    try: 
+        keys = await get_keys(exchange_name, user.id, db) 
+        api_key = keys["api_key"] 
+        api_secret = keys["api_secret"] 
+        passphrase = keys.get("passphrase") 
+        exchange = await get_working_coinbase_exchange( api_key, api_secret, passphrase, ) 
+        if not exchange: 
+            raise RuntimeError("No valid Coinbase exchange found") 
+        exchange.options["adjustForTimeDifference"] = True 
+        orders = await exchange.fetch_orders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
+        return orders 
+    except Exception as e: 
+        print(f"❌ Failed to fetch account value: {e}") 
+        raise 
+    finally: 
+        if exchange: 
+            await exchange.close()
+
+
+
+
+
+async def fetch_close_orders(
+    exchange_name: str,
+    symbol: str,
+    user,
+    db
+):
+    exchange = None
+
+    try: 
+        keys = await get_keys(exchange_name, user.id, db) 
+        api_key = keys["api_key"] 
+        api_secret = keys["api_secret"] 
+        passphrase = keys.get("passphrase") 
+        exchange = await get_working_coinbase_exchange( api_key, api_secret, passphrase, ) 
+        if not exchange: 
+            raise RuntimeError("No valid Coinbase exchange found") 
+        exchange.options["adjustForTimeDifference"] = True 
+        orders = await exchange.fetch_orders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
+        return orders 
+    except Exception as e: 
+        print(f"❌ Failed to fetch account value: {e}") 
+        raise 
+    finally: 
+        if exchange: 
+            await exchange.close()
+
+
 async def buy_sell_order_execution(
     symbol: str,
     side: str,

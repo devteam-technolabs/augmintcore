@@ -14,6 +14,9 @@ from app.coinbase.exchange import (
     get_total_coin_value,
     user_portfolio_data,
     validate_coinbase_api,
+    fetch_all_orders,
+    fetch_close_orders,
+    fetch_open_orders
 )
 from app.db.session import get_async_session
 from app.models.user import User, UserExchange
@@ -248,6 +251,84 @@ async def total_account_value(
 
     return {
         "message": "Total account value fetched successfully",
+        "status_code": 200,
+        "data": data,
+    }
+
+
+@router.get("/portfolio/all/orders")
+async def total_account_value(
+    exchange_name: str,
+    symbol: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user),
+):
+    result = await db.execute(select(User).where(User.id == current_user.id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = await fetch_all_orders(
+        exchange_name.lower(),
+        symbol,
+        user,
+        db
+    )
+
+    return {
+        "message": "Orders fetched successfully",
+        "status_code": 200,
+        "data": data,
+    }
+
+@router.get("/portfolio/close/orders")
+async def total_account_value(
+    exchange_name: str,
+    symbol: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user),
+):
+    result = await db.execute(select(User).where(User.id == current_user.id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = await fetch_close_orders(
+        exchange_name.lower(),
+        symbol,
+        user,
+        db
+    )
+
+    return {
+        "message": "Orders fetched successfully",
+        "status_code": 200,
+        "data": data,
+    }
+@router.get("/portfolio/oepn/orders")
+async def total_account_value(
+    exchange_name: str,
+    symbol: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Security(auth_user.get_current_user),
+):
+    result = await db.execute(select(User).where(User.id == current_user.id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = await fetch_open_orders(
+        exchange_name.lower(),
+        symbol,
+        user,
+        db,
+    )
+
+    return {
+        "message": "Orders fetched successfully",
         "status_code": 200,
         "data": data,
     }
