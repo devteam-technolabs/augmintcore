@@ -307,7 +307,7 @@ async def total_account_value(
         "status_code": 200,
         "data": data,
     }
-@router.get("/portfolio/oepn/orders")
+@router.get("/portfolio/open/orders")
 async def total_account_value(
     exchange_name: str,
     symbol: str,
