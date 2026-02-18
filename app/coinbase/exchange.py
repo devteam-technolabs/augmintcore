@@ -489,7 +489,7 @@ async def fetch_open_orders(
         if not exchange: 
             raise RuntimeError("No valid Coinbase exchange found") 
         exchange.options["adjustForTimeDifference"] = True 
-        orders = await exchange.fetch_orders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
+        orders = await exchange.fetchOpenOrders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
         return orders 
     except Exception as e: 
         print(f"❌ Failed to fetch account value: {e}") 
@@ -519,7 +519,7 @@ async def fetch_close_orders(
         if not exchange: 
             raise RuntimeError("No valid Coinbase exchange found") 
         exchange.options["adjustForTimeDifference"] = True 
-        orders = await exchange.fetch_orders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
+        orders = await exchange.fetchClosedOrders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
         return orders 
     except Exception as e: 
         print(f"❌ Failed to fetch account value: {e}") 
