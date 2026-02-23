@@ -597,7 +597,7 @@ async def buy_sell_order_execution(
 
         required_cost = None
         if order_type == "market" and side == "buy":
-            required_cost = quantity * ticker_price * 1.01  # 1% buffer
+            required_cost = quantity * ticker_price * 1.01  # 1% buffer 
 
             if (
                 quote == "USD"
@@ -647,8 +647,8 @@ async def buy_sell_order_execution(
                     symbol=symbol,
                     type=order_type,
                     side=side,
-                    amount=quantity,  # cost amount (USDC)
-                    params={"cost": price},  # spend exactly 1 USDC
+                    amount=None,  # cost amount (USDC)
+                    params={"cost": quantity},  # spend exactly 1 USDC
                 )
             else:
                 # market SELL uses base quantity
@@ -662,22 +662,24 @@ async def buy_sell_order_execution(
             market = exchange.market(symbol)
 
             min_amount = market["limits"]["amount"]["min"]
-            if quantity < min_amount:
-                raise ValueError(
-                    f"Quantity too small. Min {symbol} size is {min_amount}"
-                )
-
+            
             amount = float(exchange.amount_to_precision(symbol, quantity))
             price = float(exchange.price_to_precision(symbol, limit_price))
 
             print(f"LIMIT ORDER → {side.upper()} {amount} {symbol} @ {price}")
-
+            total_btc = quantity / price
+            base_amount = float(exchange.amount_to_precision(symbol, total_btc))
+            if base_amount < min_amount:
+                raise ValueError(
+                    f"Quantity too small. Min {symbol} size is {min_amount}"
+                )
             order = await exchange.create_order(
                 symbol=symbol,
                 type="limit",
                 side=side,
-                amount=amount,  # BASE quantity
-                price=price,  # LIMIT price (NOT total_cost)
+                amount=base_amount,  # BASE quantity
+                price=price,
+               # LIMIT price (NOT total_cost)
             )
 
         # ─────────────────────────────────────────────
