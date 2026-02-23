@@ -663,13 +663,16 @@ async def buy_sell_order_execution(
 
             min_amount = market["limits"]["amount"]["min"]
             
-            amount = float(exchange.amount_to_precision(symbol, quantity))
             price = float(exchange.price_to_precision(symbol, limit_price))
+            if side =="buy":
+                base_amount = quantity / price
+                total_btc = float(exchange.amount_to_precision(symbol, base_amount))
+            else :
+                total_btc = float(exchange.amount_to_precision(symbol, quantity))
+          
 
-            print(f"LIMIT ORDER → {side.upper()} {amount} {symbol} @ {price}")
-            total_btc = quantity / price
-            base_amount = float(exchange.amount_to_precision(symbol, total_btc))
-            if base_amount < min_amount:
+            print(f"LIMIT ORDER → {side.upper()} {total_btc} {symbol} @ {price}")
+            if total_btc < min_amount:
                 raise ValueError(
                     f"Quantity too small. Min {symbol} size is {min_amount}"
                 )
@@ -677,7 +680,7 @@ async def buy_sell_order_execution(
                 symbol=symbol,
                 type="limit",
                 side=side,
-                amount=base_amount,  # BASE quantity
+                amount=total_btc,  # BASE quantity
                 price=price,
                # LIMIT price (NOT total_cost)
             )
