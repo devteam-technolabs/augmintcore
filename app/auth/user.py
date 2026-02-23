@@ -144,5 +144,14 @@ class AuthUser:
             raise HTTPException(status_code=401, detail="User not found")
         return user
 
+async def get_user_from_token(token: str, db: AsyncSession = Depends(get_async_session)):
+    try:
+        payload = jwt.decode(token, settings.ACCESS_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            return None
+        return await db.get(User, int(user_id))
+    except JWTError:
+        return None
 
 auth_user = AuthUser()

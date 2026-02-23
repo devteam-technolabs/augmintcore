@@ -22,6 +22,7 @@ from app.api.router import router as api_router
 from app.api.settings_routers import settings_router
 from app.api.websocket_routers import coinbase_ws_listener
 from app.api.websocket_routers import router as websocket_router
+from app.websocket.router import router as ws_router
 from app.core import events
 from app.core.config import get_settings
 from app.core.exception_handlers import (
@@ -29,6 +30,7 @@ from app.core.exception_handlers import (
     custom_http_exception_handler,
 )
 from app.db.session import engine
+from app.websocket.background.top10_listener import top10_coinbase_listener, stop_top10_listener
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -56,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix="/api")
     app.include_router(payment_router, prefix="/api")
     app.include_router(exchange_routers, prefix="/api")
+    app.include_router(ws_router, prefix="/api")
     app.include_router(websocket_router, prefix="/api")
     app.include_router(coingecko_router, prefix="/api")
     app.include_router(settings_router, prefix="/api/v1")
@@ -68,6 +71,7 @@ def create_app() -> FastAPI:
         logger.warning(" STARTUP EVENT TRIGGERED")
 
         app.state.coinbase_ws_task = asyncio.create_task(coinbase_ws_listener())
+        asyncio.create_task(top10_coinbase_listener())
         logger.warning(" COINBASE WS TASK CREATED")
 
         # call optional project-specific startup hook
@@ -93,6 +97,7 @@ def create_app() -> FastAPI:
     async def _on_shutdown() -> None:
         # call optional project-specific shutdown hook
         logger.info("Application shutdown initiated")
+        await stop_top10_listener()
         if hasattr(events, "shutdown") and callable(events.shutdown):
             res = events.shutdown()
             if inspect.isawaitable(res):

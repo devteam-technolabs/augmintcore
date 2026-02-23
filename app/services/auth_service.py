@@ -8,7 +8,7 @@ from app.core.config import get_settings
 settings = get_settings()
 
 
-def create_access_token(data: dict, minutes: int = 15):
+def create_access_token(data: dict, minutes: int = 300):
     payload = data.copy()
     payload["exp"] = datetime.utcnow() + timedelta(minutes=minutes)
     return jwt.encode(payload, settings.ACCESS_SECRET_KEY, algorithm=settings.ALGORITHM)
