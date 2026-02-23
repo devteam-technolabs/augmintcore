@@ -568,7 +568,7 @@ async def buy_sell_order_execution(
         if order_type not in {"market", "limit"}:
             raise ValueError("order_type must be market or limit")
 
-        if order_type == "limit" and price is None:
+        if order_type == "limit" and limit_price is None:
             raise ValueError("price required for limit orders")
 
         await exchange.load_markets()
