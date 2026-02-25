@@ -44,6 +44,7 @@ PERIOD_MAP = {
     "1y": 365,
 }
 
+
 CRYPTO_NAME_MAP = {
     "bitcoin": "BTC/USD",
     "ethereum": "ETH/USD",
@@ -54,7 +55,7 @@ CRYPTO_NAME_MAP = {
     "dogecoin": "DOGE/USD",
     "avalanche-2": "AVAX/USD",
     "chainlink": "LINK/USD",
-    "polygon": "MATIC/USD",
+    "polygon": "POL/USD",
 }
 
 
@@ -892,6 +893,94 @@ TIMEFRAME_CONFIG = {
     "1d": {"days": 30, "candle_minutes": 1440},
 }
 
+async def fetch_from_binance(
+    target_symbol,
+    timeframe,
+    since_timestamp,
+    limit,
+):
+    exchange = ccxt.binance({"enableRateLimit": True})
+
+    try:
+        print("\n--- Trying exchange: binance ---")
+
+        await exchange.load_markets()
+
+        # Convert USD → USDT for Binance
+        if target_symbol.endswith("/USD"):
+            binance_symbol = target_symbol.replace("/USD", "/USDT")
+        else:
+            binance_symbol = target_symbol
+
+        print("Converted Binance symbol:", binance_symbol)
+
+        if binance_symbol not in exchange.symbols:
+            print(f"❌ {binance_symbol} not supported on binance")
+            return []
+
+        candles = await exchange.fetch_ohlcv(
+            binance_symbol,
+            timeframe=timeframe,
+            since=since_timestamp,
+            limit=limit,
+        )
+
+        print(f"📊 Binance candles received: {len(candles)}")
+        return candles
+
+    except Exception as e:
+        print("❌ Binance error:", str(e))
+        return []
+
+    finally:
+        await exchange.close()
+        print("binance connection closed")
+
+async def fetch_from_exchange(
+    exchange_class,
+    target_symbol,
+    timeframe,
+    since_timestamp,
+    limit,
+    keys,
+):
+    exchange = exchange_class(
+        {
+            "apiKey": keys["api_key"],
+            "secret": keys["api_secret"],
+            "password": keys.get("passphrase"),
+            "enableRateLimit": True,
+        }
+    )
+
+    try:
+        print(f"\n--- Trying exchange: {exchange_class.__name__} ---")
+
+        await exchange.load_markets()
+
+        if target_symbol not in exchange.symbols:
+            print(f"❌ {target_symbol} not supported on {exchange_class.__name__}")
+            return []
+
+        print(f"✅ {target_symbol} supported on {exchange_class.__name__}")
+
+        candles = await exchange.fetch_ohlcv(
+            target_symbol,
+            timeframe=timeframe,
+            since=since_timestamp,
+            limit=limit,
+        )
+
+        print(f"📊 Candles received: {len(candles)}")
+        return candles
+
+    except Exception as e:
+        print(f"❌ Error from {exchange_class.__name__}: {str(e)}")
+        return []
+
+    finally:
+        await exchange.close()
+        print(f"{exchange_class.__name__} connection closed")
 
 async def get_historical_ohlc_data(
     user,
@@ -900,7 +989,10 @@ async def get_historical_ohlc_data(
     before: int | None,
     db: AsyncSession,
 ):
-    # Validate timeframe
+    print("\n========== OHLC DEBUG START ==========")
+    print("Requested coin:", symbol)
+    print("Requested timeframe:", timeframe)
+
     if timeframe not in TIMEFRAME_CONFIG:
         raise HTTPException(status_code=400, detail="Invalid timeframe")
 
@@ -908,46 +1000,56 @@ async def get_historical_ohlc_data(
     days = config["days"]
     candle_minutes = config["candle_minutes"]
 
-    # Convert symbol
     target_symbol = CRYPTO_NAME_MAP.get(symbol.lower(), symbol.upper())
+    print("Mapped symbol:", target_symbol)
 
-    # Fetch user exchange keys
     keys = await get_keys("coinbase", user.id, db)
 
-    # Create exchange client
-    exchange = ccxt.coinbaseexchange(
-        {
-            "apiKey": keys["api_key"],
-            "secret": keys["api_secret"],
-            "password": keys["passphrase"],
-            "enableRateLimit": True,
-        }
-    )
+    # 🔒 Clamp timestamp safely
+    temp_exchange = ccxt.coinbaseexchange()
+    now = temp_exchange.milliseconds()
+    await temp_exchange.close()
 
-    # Determine end time
-    until_timestamp = before or exchange.milliseconds()
+    if before:
+        print("Before param:", before)
+        until_timestamp = min(before, now)
+    else:
+        until_timestamp = now
 
-    # Calculate total candles needed
+    print("Final until timestamp:", until_timestamp)
+
     total_minutes = days * 24 * 60
     total_candles = total_minutes // candle_minutes
-
-    # Coinbase limit
     limit = min(total_candles, 300)
 
-    # Calculate start timestamp
     since_timestamp = until_timestamp - (limit * candle_minutes * 60 * 1000)
 
-    try:
-        candles = await exchange.fetch_ohlcv(
+    print("Since timestamp:", since_timestamp)
+    print("Limit:", limit)
+
+    # 🔥 Try primary exchange first
+    candles = await fetch_from_exchange(
+        ccxt.coinbaseexchange,
+        target_symbol,
+        timeframe,
+        since_timestamp,
+        limit,
+        keys,
+    )
+
+    # 🔁 Fallback if no data
+    if not candles:
+        print("No candles from coinbaseexchange. Trying binance...")
+        candles = await fetch_from_binance(
             target_symbol,
-            timeframe=timeframe,
-            since=since_timestamp,
-            limit=limit,
+            timeframe,
+            since_timestamp,
+            limit,
         )
-    finally:
-        await exchange.close()
 
     if not candles:
+        print("⚠️ No candles from any exchange")
+        print("========== OHLC DEBUG END ==========\n")
         return {
             "symbol": target_symbol,
             "timeframe": timeframe,
@@ -969,8 +1071,10 @@ async def get_historical_ohlc_data(
         for c in candles
     ]
 
-    # Pagination cursor
     next_before = candles[0][0]
+
+    print("Oldest candle timestamp:", next_before)
+    print("========== OHLC DEBUG END ==========\n")
 
     return {
         "symbol": target_symbol,
