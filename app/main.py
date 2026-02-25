@@ -20,8 +20,8 @@ from app.api.exchange_routers import router as exchange_routers
 from app.api.payment_routes import router as payment_router
 from app.api.router import router as api_router
 from app.api.settings_routers import settings_router
-from app.api.websocket_routers import coinbase_ws_listener
-from app.api.websocket_routers import router as websocket_router
+# from app.api.websocket_routers import coinbase_ws_listener
+# from app.api.websocket_routers import router as websocket_router
 from app.websocket.router import router as ws_router
 from app.core import events
 from app.core.config import get_settings
@@ -59,7 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(payment_router, prefix="/api")
     app.include_router(exchange_routers, prefix="/api")
     app.include_router(ws_router, prefix="/api")
-    app.include_router(websocket_router, prefix="/api")
+    # app.include_router(websocket_router, prefix="/api")
     app.include_router(coingecko_router, prefix="/api")
     app.include_router(settings_router, prefix="/api/v1")
 
@@ -70,7 +70,7 @@ def create_app() -> FastAPI:
         logger.info("Application startup initiated")
         logger.warning(" STARTUP EVENT TRIGGERED")
 
-        app.state.coinbase_ws_task = asyncio.create_task(coinbase_ws_listener())
+        # app.state.coinbase_ws_task = asyncio.create_task(coinbase_ws_listener())
         asyncio.create_task(top10_coinbase_listener())
         logger.warning(" COINBASE WS TASK CREATED")
 
