@@ -17,6 +17,7 @@
 # router = APIRouter(prefix="/market", tags=["Market"])
 # logger = logging.getLogger(__name__)
 
+COINBASE_WS_URL = "wss://ws-feed.exchange.coinbase.com"
 # COINBASE_WS_URL = "wss://ws-feed.exchange.coinbase.com"
 
 # TOP_10_PRODUCTS = [
@@ -154,6 +155,58 @@
 
 #     try:
 #         exchange = await fetch_orderbook_async(symbol, user=user, db=db)
+#         while True:
+#             try:
+#                 orderbook = await exchange.fetch_order_book(symbol)
+
+#                 bids = orderbook["bids"][:10]
+#                 asks = orderbook["asks"][:10]
+
+#                 payload = {
+#                     "bids": [{"price": b[0], "size": b[1]} for b in bids],
+#                     "asks": [{"price": a[0], "size": a[1]} for a in asks],
+#                 }
+
+#                 await websocket.send_text(json.dumps(payload))
+#                 await asyncio.sleep(2)
+#             finally:
+#                 await exchange.close()
+
+#     except WebSocketDisconnect:
+#         print(f"🔌 User {user.id} disconnected")
+
+#     finally:
+#         await websocket.close()
+
+
+# @router.websocket("/ws/price/{symbol}")
+# async def single_coin_stream(ws: WebSocket, symbol: str):
+#     await ws.accept()
+#     symbol = symbol.upper()
+
+#     logger.info(f"Client connected for {symbol}")
+
+#     try:
+#         await coinbase_single_symbol_ws(symbol, ws)
+
+#     except WebSocketDisconnect:
+#         logger.info(f"Client disconnected ({symbol})")
+
+#     except Exception as e:
+#         logger.error(f"WS error ({symbol}): {e}")
+
+#     finally:
+#         await ws.close()
+
+# SEND_INTERVAL = 2.5
+
+# class CoinbaseClient:
+#     def __init__(self, symbol: str, client_ws: WebSocket):
+#         self.symbol = symbol
+#         self.client_ws = client_ws
+#         self.last_sent = 0
+
+#     async def connect_and_stream(self):
 #         while True:
 #             try:
 #                 orderbook = await exchange.fetch_order_book(symbol)

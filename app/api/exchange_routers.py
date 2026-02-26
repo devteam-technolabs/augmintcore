@@ -414,3 +414,4 @@ async def get_ohlc_data(
         before=before,
         db=db,
     )
+

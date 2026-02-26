@@ -1144,3 +1144,87 @@ async def fetch_orderbook_async(symbol: str, user=None, db=None):
         }
     )
     return exchange
+
+async def get_real_profit_loss(exchange_name: str, user, db: AsyncSession,base_currency='USD'):
+    try :
+        exchange = None
+
+        keys = await get_keys(exchange_name, user.id, db)
+
+        exchange = ccxt.coinbaseexchange(
+                {
+                    "apiKey": keys["api_key"],
+                    "secret": keys["api_secret"],
+                    "password": keys["passphrase"],
+                    "enableRateLimit": True,
+                }
+            )
+        
+        balance = exchange.fetch_balance()
+        holdings = {curr: amt for curr, amt in balance['total'].items() if amt > 0}
+        total_portfolio_value = 0.0
+        portfolio_value_24h_ago = 0.0
+
+        for currency, amount in holdings.items():
+            total_portfolio_value += amount
+            portfolio_value_24h_ago += amount
+            continue
+
+        symbol = f"{currency}/{base_currency}"
+                
+        try:
+            # Fetch 24h ticker data
+            ticker = exchange.fetch_ticker(symbol)
+            current_price =ticker['last']
+            open_price =ticker['open']
+            total_portfolio_value += (amount * current_price)
+            if open_price:
+                portfolio_value_24h_ago += (amount * open_price)
+            else:
+                # Fallback if 'open' isn't provided by the exchange
+                portfolio_value_24h_ago += (amount * current_price)
+        except ccxt.BadSymbol:
+            print(f"Skipping {symbol} - not found on Coinbase.")
+        except Exception as e:
+            print(f"Error fetching ticker for {symbol}: {e}")
+        pl_24h = total_portfolio_value - portfolio_value_24h_ago
+        pl_24h_percentage = (pl_24h / portfolio_value_24h_ago) * 100 if portfolio_value_24h_ago > 0 else 0
+
+        total_cost_basis = 0.0
+        for currency in holdings.keys():
+                if currency == base_currency: continue
+                
+                symbol = f"{currency}/{base_currency}"
+                try:
+                        # Fetch historical trades for this specific pair
+                    trades = exchange.fetch_my_trades(symbol)
+                        
+                    for trade in trades:
+                        if trade['side'] == 'buy':
+                                # Cost includes the fee
+                            total_cost_basis += trade['cost'] 
+                        elif trade['side'] == 'sell':
+                                # Deduct proportional cost (simplified average method)
+                                # More complex FIFO logic is needed for strict accounting
+                            total_cost_basis -= trade['cost']
+                                
+                except Exception as e:
+                        print(f"Could not fetch trades for {symbol}: {e}")
+
+                # 4. Calculate Total P/L
+                total_pl = total_portfolio_value - total_cost_basis
+                total_pl_percentage = (total_pl / total_cost_basis) * 100 if total_cost_basis > 0 else 0
+
+                return {
+                    "Total Portfolio Value": round(total_portfolio_value, 2),
+                    "P/L 24h ($)": round(pl_24h, 2),
+                    "P/L 24h (%)": round(pl_24h_percentage, 2),
+                    "Cost Basis": round(total_cost_basis, 2),
+                    "Total P/L ($)": round(total_pl, 2),
+                    "Total P/L (%)": round(total_pl_percentage, 2)
+                }
+
+    except ccxt.NetworkError as e:
+        print(f"Network error: {e}")
+    except ccxt.ExchangeError as e:
+        print(f"Exchange error: {e}")

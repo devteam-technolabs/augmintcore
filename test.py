@@ -1,4 +1,4 @@
-# # import asyncio
+import asyncio
 # # import websockets
 # # import json
 
@@ -242,109 +242,288 @@
 # asyncio.run(get_historical_data())
 
 
-import asyncio
-import json
+# import asyncio
+# import json
 
-import uvicorn
-import websockets
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+# import uvicorn
+# import websockets
+# from fastapi import FastAPI
+# from fastapi.middleware.cors import CORSMiddleware
 
-COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
+# COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
 
-# FIXED ORDERBOOK STORAGE
-orderbook = {"bids": {}, "asks": {}, "last_trade": None}
+# # FIXED ORDERBOOK STORAGE
+# orderbook = {"bids": {}, "asks": {}, "last_trade": None}
 
-app = FastAPI()
+# app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-def update_book(side, price, size):
-    p = float(price)
-    s = float(size)
-
-    book = orderbook["bids"] if side == "buy" else orderbook["asks"]
-
-    # REMOVE LEVEL
-    if s == 0:
-        if p in book:
-            del book[p]
-    else:
-        book[p] = s
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 
-async def coinbase_orderbook_ws(product_id="BTC-USD"):
-    subscribe_msg = {
-        "type": "subscribe",
-        "channels": [
-            {"name": "level2", "product_ids": [product_id]},
-            {"name": "matches", "product_ids": [product_id]},
-        ],
-    }
+# def update_book(side, price, size):
+#     p = float(price)
+#     s = float(size)
 
-    while True:
-        try:
-            async with websockets.connect(COINBASE_WS) as ws:
+#     book = orderbook["bids"] if side == "buy" else orderbook["asks"]
 
-                await ws.send(json.dumps(subscribe_msg))
-                print("Connected to Coinbase WS")
-
-                async for raw in ws:
-                    data = json.loads(raw)
-
-                    # SNAPSHOT (full book)
-                    if data.get("type") == "snapshot":
-                        orderbook["bids"] = {
-                            float(p): float(s) for p, s in data["bids"]
-                        }
-                        orderbook["asks"] = {
-                            float(p): float(s) for p, s in data["asks"]
-                        }
-
-                    # ORDER UPDATES
-                    elif data.get("type") == "l2update":
-                        for side, price, size in data["changes"]:
-                            update_book(side, price, size)
-
-                    # LAST TRADE
-                    elif data.get("type") == "match":
-                        orderbook["last_trade"] = {
-                            "price": data["price"],
-                            "size": data["size"],
-                            "side": data["side"],
-                            "time": data["time"],
-                        }
-
-        except Exception as e:
-            print("WebSocket Error → Reconnecting:", e)
-            await asyncio.sleep(3)
+#     # REMOVE LEVEL
+#     if s == 0:
+#         if p in book:
+#             del book[p]
+#     else:
+#         book[p] = s
 
 
-@app.get("/orderbook")
-async def get_orderbook():
-    bids = sorted(orderbook["bids"].items(), key=lambda x: -x[0])[:20]
-    asks = sorted(orderbook["asks"].items(), key=lambda x: x[0])[:20]
+# async def coinbase_orderbook_ws(product_id="BTC-USD"):
+#     subscribe_msg = {
+#         "type": "subscribe",
+#         "channels": [
+#             {"name": "level2", "product_ids": [product_id]},
+#             {"name": "matches", "product_ids": [product_id]},
+#         ],
+#     }
 
-    return {
-        "bids": [{"price": p, "size": s} for p, s in bids],
-        "asks": [{"price": p, "size": s} for p, s in asks],
-        "last_trade": orderbook["last_trade"],
-    }
+#     while True:
+#         try:
+#             async with websockets.connect(COINBASE_WS) as ws:
+
+#                 await ws.send(json.dumps(subscribe_msg))
+#                 print("Connected to Coinbase WS")
+
+#                 async for raw in ws:
+#                     data = json.loads(raw)
+
+#                     # SNAPSHOT (full book)
+#                     if data.get("type") == "snapshot":
+#                         orderbook["bids"] = {
+#                             float(p): float(s) for p, s in data["bids"]
+#                         }
+#                         orderbook["asks"] = {
+#                             float(p): float(s) for p, s in data["asks"]
+#                         }
+
+#                     # ORDER UPDATES
+#                     elif data.get("type") == "l2update":
+#                         for side, price, size in data["changes"]:
+#                             update_book(side, price, size)
+
+#                     # LAST TRADE
+#                     elif data.get("type") == "match":
+#                         orderbook["last_trade"] = {
+#                             "price": data["price"],
+#                             "size": data["size"],
+#                             "side": data["side"],
+#                             "time": data["time"],
+#                         }
+
+#         except Exception as e:
+#             print("WebSocket Error → Reconnecting:", e)
+#             await asyncio.sleep(3)
 
 
-@app.on_event("startup")
-async def start_socket():
-    asyncio.create_task(coinbase_orderbook_ws())
+# @app.get("/orderbook")
+# async def get_orderbook():
+#     bids = sorted(orderbook["bids"].items(), key=lambda x: -x[0])[:20]
+#     asks = sorted(orderbook["asks"].items(), key=lambda x: x[0])[:20]
+
+#     return {
+#         "bids": [{"price": p, "size": s} for p, s in bids],
+#         "asks": [{"price": p, "size": s} for p, s in asks],
+#         "last_trade": orderbook["last_trade"],
+#     }
 
 
-if __name__ == "__main__":
-    uvicorn.run("test:app", host="0.0.0.0", port=8000, reload=True)
+# @app.on_event("startup")
+# async def start_socket():
+#     asyncio.create_task(coinbase_orderbook_ws())
+
+
+# if __name__ == "__main__":
+#     uvicorn.run("test:app", host="0.0.0.0", port=8000, reload=True)
 
 
 # Adding a comment for testing
+import ccxt.async_support as ccxt
+from app.coinbase.coinbase_cctx import get_working_coinbase_exchange
+
+
+
+
+keys = {
+        "api_key": "organizations/dce12743-0903-4c2b-88d4-49ad95cce694/apiKeys/e891dae7-04ce-4f09-b430-7e21faa70a72",
+        "api_secret": '-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIJ9kz/KWvnsto9q1xOGkLP08c4mmtIipH0YhM7QBeNT9oAoGCCqGSM49\nAwEHoUQDQgAEpodAXPGHGejhvpc5CQ7Is4gIzJuTcUas+UGTk99l4oOnpTNZCyyD\n7BYgYPBqmwc0LDaGvcth2QUIz/Z6QiglDg==\n-----END EC PRIVATE KEY-----\n',
+        "passphrase": None,
+    }
+            
+api_key = keys["api_key"]
+api_secret = keys["api_secret"]
+passphrase = keys.get("passphrase")
+
+async def calculate_total_trade_value():
+    exchange =None
+
+    try:
+        exchange = await get_working_coinbase_exchange(
+            keys["api_key"],
+            keys["api_secret"],
+            keys.get("passphrase", "")
+        )
+        trades = await exchange.fetch_my_trades()
+        total_trade_value = 0.0
+        trade_count = 0
+        for trade in trades:
+            if trade['side'] == "buy":
+                cost = trade["cost"]
+                if cost :
+                    total_trade_value += cost
+                    trade_count +=1
+        return round(total_trade_value, 2), trade_count
+
+    finally:
+        if exchange:
+            await exchange.close()
+async def calculate_portfolio_metrics(base_currency="USD"):
+    exchange = None
+
+    try:
+        exchange = await get_working_coinbase_exchange(
+            keys["api_key"],
+            keys["api_secret"],
+            keys.get("passphrase", "")
+        )
+
+        balance = (
+            exchange._cached_validation_balance
+            if hasattr(exchange, "_cached_validation_balance")
+            else await exchange.fetch_balance()
+        )
+        total_assets_balance = balance["total"]
+        STABLE_COINS = {"USDC", "USDT"}
+
+        portfolio_value = 0.0
+        total_cost_basis = 0.0
+        asset_breakdown = {}
+
+        for asset, amount in total_assets_balance.items():
+            if amount == 0:
+                continue
+
+            if asset in STABLE_COINS:
+                usd_value = amount
+            else:
+                symbol = f"{asset}/USD"
+                ticker = await exchange.fetch_ticker(symbol)
+                price = ticker["last"]
+                usd_value = amount * price
+
+            portfolio_value += usd_value
+            asset_breakdown[asset] = round(usd_value, 2)
+
+        ###For the total cost basis
+        trades = await exchange.fetch_my_trades()
+        for trade in trades:
+            if trade['side']=="buy":
+                cost = trade['cost']
+                if cost :
+                    total_cost_basis+=cost
+        unrealised_pl = portfolio_value - total_cost_basis
+
+
+    finally:
+        if exchange:
+            await exchange.close()
+
+
+
+    #     print(balance)
+    #     holdings = {curr: amt for curr, amt in balance['total'].items() if amt > 0}
+        
+    #     total_portfolio_value = 0.0
+    #     portfolio_value_24h_ago = 0.0
+
+    #     # 1. Calculate Total Value and 24h P/L
+    #     for currency, amount in holdings.items():
+    #         if currency == base_currency:
+    #             # If holding USD, just add the raw amount
+    #             total_portfolio_value += amount
+    #             portfolio_value_24h_ago += amount
+    #             continue # Skip the ticker fetch for USD
+                
+    #         symbol = f"{currency}/{base_currency}"
+                    
+    #         try:
+    #             # Fetch 24h ticker data
+    #             ticker = await exchange.fetch_ticker(symbol)
+                
+    #             # Safely get prices, defaulting to 0 if missing
+    #             current_price = ticker.get('last', 0)
+    #             open_price = ticker.get('open', 0)
+                
+    #             # Multiply amount by price!
+    #             total_portfolio_value += (amount * current_price)
+                
+    #             if open_price:
+    #                 portfolio_value_24h_ago += (amount * open_price)
+    #             else:
+    #                 # Fallback if 'open' isn't provided
+    #                 portfolio_value_24h_ago += (amount * current_price)
+                    
+    #         except ccxt.BadSymbol:
+    #             print(f"Skipping {symbol} - not found on Coinbase.")
+    #         except Exception as e:
+    #             print(f"Error fetching ticker for {symbol}: {e}")
+                
+    #     # Calculate 24h differences outside the loop
+    #     pl_24h = total_portfolio_value - portfolio_value_24h_ago
+    #     pl_24h_percentage = (pl_24h / portfolio_value_24h_ago) * 100 if portfolio_value_24h_ago > 0 else 0
+
+    #     # 2. Calculate Cost Basis
+    #     total_cost_basis = 0.0
+    #     for currency in holdings.keys():
+    #         if currency == base_currency: 
+    #             continue
+                
+    #         symbol = f"{currency}/{base_currency}"
+    #         try:
+    #             # Fetch historical trades for this specific pair
+    #             trades = await exchange.fetch_my_trades(symbol)
+                    
+    #             for trade in trades:
+    #                 if trade['side'] == 'buy':
+    #                     total_cost_basis += trade['cost'] 
+    #                 elif trade['side'] == 'sell':
+    #                     total_cost_basis -= trade['cost']
+                            
+    #         except Exception as e:
+    #             print(f"Could not fetch trades for {symbol}: {e}")
+
+    #     # 3. Calculate Total P/L (Outside the loop!)
+    #     total_pl = total_portfolio_value - total_cost_basis
+    #     total_pl_percentage = (total_pl / total_cost_basis) * 100 if total_cost_basis > 0 else 0
+
+    #     return {
+    #         "Total Portfolio Value": round(total_portfolio_value, 2),
+    #         "P/L 24h ($)": round(pl_24h, 2),
+    #         "P/L 24h (%)": round(pl_24h_percentage, 2),
+    #         "Cost Basis": round(total_cost_basis, 2),
+    #         "Total P/L ($)": round(total_pl, 2),
+    #         "Total P/L (%)": round(total_pl_percentage, 2)
+    #     }
+
+    # except ccxt.NetworkError as e:
+    #     print(f"Network error: {e}")
+    # except ccxt.ExchangeError as e:
+    #     print(f"Exchange error: {e}")
+    # finally:
+    #     # THIS FIXES THE WARNING: Always close the connection
+    #     if exchange is not None:
+    #         await exchange.close()
+
+# Run the calculation
+metrics = asyncio.run(calculate_total_trade_value())
+print(metrics)
