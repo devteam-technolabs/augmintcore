@@ -16,7 +16,9 @@ from app.coinbase.exchange import (
     validate_coinbase_api,
     fetch_all_orders,
     fetch_close_orders,
-    fetch_open_orders
+    fetch_open_orders,
+    calculate_dashboard
+    
 )
 from app.db.session import get_async_session
 from app.models.user import User, UserExchange
@@ -415,3 +417,10 @@ async def get_ohlc_data(
         db=db,
     )
 
+@router.get("/get_profit_loss")
+async def dashboard_data(exchange_name: str,
+                         current_user: User = Security(auth_user.get_current_user), 
+                         db: AsyncSession = Depends(get_async_session)):
+    return await calculate_dashboard(
+        exchange_name=exchange_name,user=current_user,db=db
+    )

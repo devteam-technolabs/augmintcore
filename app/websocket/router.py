@@ -10,6 +10,9 @@ from app.db.session import get_async_session
 from app.websocket.handlers.market_price import handle_market_price, change_symbol
 from app.websocket.handlers.order_book import handle_order_book
 from app.websocket.handlers.top_10 import handle_top_10
+from app.websocket.background.redis_utils import get_cached_dashboard
+from app.api.exchange_routers import calculate_dashboard
+from app.core.redis import redis_client  # your existing redis client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["Market WebSocket"])
@@ -193,6 +196,52 @@ async def unified_market_ws(
             except asyncio.CancelledError:
                 print("✅ Worker cancelled successfully")
 
+
+@router.websocket("/ws/dashboard")
+async def dashboard_ws(websocket: WebSocket,db: AsyncSession = Depends(get_async_session),):
+    await websocket.accept()
+    try:
+        auth_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+        print(" Auth message:", auth_msg)
+
+        auth_data = json.loads(auth_msg)
+        token = auth_data.get("token")
+        if not token:
+            await websocket.send_json({"error": "Token required"})
+            await websocket.close()
+            return
+
+        user = await get_user_from_token(token, db)
+
+        if not user:
+            await websocket.send_json({"error": "Invalid token"})
+            print("Invalid token")
+            await websocket.close()
+            return
+        
+    except asyncio.TimeoutError:
+        await websocket.send_json({"error": "Auth timeout"})
+        await websocket.close()
+        return
+    except Exception as e:
+        print(" Dashboard WS error:", repr(e))
+        await websocket.close()
+
+    user_id = str(user.id)
+    redis = redis_client
+    try:
+        while True:
+            data = await get_cached_dashboard(
+                user_id,
+                redis,
+                lambda: calculate_dashboard("coinbase", user, db)
+            )
+
+            await websocket.send_json(data)
+            await asyncio.sleep(2)  # push interval
+
+    except Exception:
+        await websocket.close()
 # import asyncio
 # import json
 # import logging

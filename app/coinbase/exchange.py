@@ -1228,3 +1228,66 @@ async def get_real_profit_loss(exchange_name: str, user, db: AsyncSession,base_c
         print(f"Network error: {e}")
     except ccxt.ExchangeError as e:
         print(f"Exchange error: {e}")
+
+
+async def calculate_dashboard(exchange_name:str,user,db: AsyncSession):
+    exchange = None
+    keys = await get_keys(exchange_name, user.id, db)
+
+    try:
+        exchange = await get_working_coinbase_exchange(
+            keys["api_key"],
+            keys["api_secret"],
+            keys.get("passphrase", "")
+        )
+
+        balance = (
+            exchange._cached_validation_balance
+            if hasattr(exchange, "_cached_validation_balance")
+            else await exchange.fetch_balance()
+        )
+        total_assets_balance = balance["total"]
+        STABLE_COINS = {"USDC", "USDT"}
+        # tickers = await exchange.fetch_ticker()
+        portfolio_value = 0.0
+        total_cost_basis = 0.0
+        asset_breakdown = {}
+        asset_amount ={}
+
+        for asset, amount in total_assets_balance.items():
+            if amount == 0:
+                continue
+
+            if asset in STABLE_COINS:
+                usd_value = amount
+            else:
+               
+                symbol = f"{asset}/USD"
+                ticker = await exchange.fetch_ticker(symbol)
+                usd_value = amount * ticker["last"]
+                # usd_value = amount * price
+
+            portfolio_value += usd_value
+            asset_breakdown[asset] = round(usd_value, 2)
+            asset_amount[asset] = amount
+
+        ###For the total unrealized P/L and the cost basis
+        trades = await exchange.fetch_my_trades()
+        for trade in trades:
+            if trade['side']=="buy":
+                cost = trade['cost']
+                if cost :
+                    total_cost_basis+=cost
+        unrealised_pl = portfolio_value - total_cost_basis
+        return {
+            "total_portfolio_value":round(portfolio_value,2),
+            "total_asset_breakdown":asset_breakdown,
+            "total_unrealized_p/l":round(unrealised_pl,2),
+            "total_cost_basis":round(total_cost_basis,2),
+            "total_asset_amount":asset_amount
+        }
+
+    finally:
+        if exchange:
+            await exchange.close()
+
