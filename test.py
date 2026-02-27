@@ -348,95 +348,95 @@ import asyncio
 
 
 # Adding a comment for testing
-import ccxt.async_support as ccxt
-from app.coinbase.coinbase_cctx import get_working_coinbase_exchange
+# import ccxt.async_support as ccxt
+# from app.coinbase.coinbase_cctx import get_working_coinbase_exchange
 
 
 
 
-keys = {
-        "api_key": "organizations/dce12743-0903-4c2b-88d4-49ad95cce694/apiKeys/e891dae7-04ce-4f09-b430-7e21faa70a72",
-        "api_secret": '-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIJ9kz/KWvnsto9q1xOGkLP08c4mmtIipH0YhM7QBeNT9oAoGCCqGSM49\nAwEHoUQDQgAEpodAXPGHGejhvpc5CQ7Is4gIzJuTcUas+UGTk99l4oOnpTNZCyyD\n7BYgYPBqmwc0LDaGvcth2QUIz/Z6QiglDg==\n-----END EC PRIVATE KEY-----\n',
-        "passphrase": None,
-    }
+# keys = {
+#         "api_key": "organizations/dce12743-0903-4c2b-88d4-49ad95cce694/apiKeys/e891dae7-04ce-4f09-b430-7e21faa70a72",
+#         "api_secret": '-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIJ9kz/KWvnsto9q1xOGkLP08c4mmtIipH0YhM7QBeNT9oAoGCCqGSM49\nAwEHoUQDQgAEpodAXPGHGejhvpc5CQ7Is4gIzJuTcUas+UGTk99l4oOnpTNZCyyD\n7BYgYPBqmwc0LDaGvcth2QUIz/Z6QiglDg==\n-----END EC PRIVATE KEY-----\n',
+#         "passphrase": None,
+#     }
             
-api_key = keys["api_key"]
-api_secret = keys["api_secret"]
-passphrase = keys.get("passphrase")
+# api_key = keys["api_key"]
+# api_secret = keys["api_secret"]
+# passphrase = keys.get("passphrase")
 
-async def calculate_total_trade_value():
-    exchange =None
+# async def calculate_total_trade_value():
+#     exchange =None
 
-    try:
-        exchange = await get_working_coinbase_exchange(
-            keys["api_key"],
-            keys["api_secret"],
-            keys.get("passphrase", "")
-        )
-        trades = await exchange.fetch_my_trades()
-        total_trade_value = 0.0
-        trade_count = 0
-        for trade in trades:
-            if trade['side'] == "buy":
-                cost = trade["cost"]
-                if cost :
-                    total_trade_value += cost
-                    trade_count +=1
-        return round(total_trade_value, 2), trade_count
+#     try:
+#         exchange = await get_working_coinbase_exchange(
+#             keys["api_key"],
+#             keys["api_secret"],
+#             keys.get("passphrase", "")
+#         )
+#         trades = await exchange.fetch_my_trades()
+#         total_trade_value = 0.0
+#         trade_count = 0
+#         for trade in trades:
+#             if trade['side'] == "buy":
+#                 cost = trade["cost"]
+#                 if cost :
+#                     total_trade_value += cost
+#                     trade_count +=1
+#         return round(total_trade_value, 2), trade_count
 
-    finally:
-        if exchange:
-            await exchange.close()
-async def calculate_portfolio_metrics(base_currency="USD"):
-    exchange = None
+#     finally:
+#         if exchange:
+#             await exchange.close()
+# async def calculate_portfolio_metrics(base_currency="USD"):
+#     exchange = None
 
-    try:
-        exchange = await get_working_coinbase_exchange(
-            keys["api_key"],
-            keys["api_secret"],
-            keys.get("passphrase", "")
-        )
+#     try:
+#         exchange = await get_working_coinbase_exchange(
+#             keys["api_key"],
+#             keys["api_secret"],
+#             keys.get("passphrase", "")
+#         )
 
-        balance = (
-            exchange._cached_validation_balance
-            if hasattr(exchange, "_cached_validation_balance")
-            else await exchange.fetch_balance()
-        )
-        total_assets_balance = balance["total"]
-        STABLE_COINS = {"USDC", "USDT"}
+#         balance = (
+#             exchange._cached_validation_balance
+#             if hasattr(exchange, "_cached_validation_balance")
+#             else await exchange.fetch_balance()
+#         )
+#         total_assets_balance = balance["total"]
+#         STABLE_COINS = {"USDC", "USDT"}
 
-        portfolio_value = 0.0
-        total_cost_basis = 0.0
-        asset_breakdown = {}
+#         portfolio_value = 0.0
+#         total_cost_basis = 0.0
+#         asset_breakdown = {}
 
-        for asset, amount in total_assets_balance.items():
-            if amount == 0:
-                continue
+#         for asset, amount in total_assets_balance.items():
+#             if amount == 0:
+#                 continue
 
-            if asset in STABLE_COINS:
-                usd_value = amount
-            else:
-                symbol = f"{asset}/USD"
-                ticker = await exchange.fetch_ticker(symbol)
-                price = ticker["last"]
-                usd_value = amount * price
+#             if asset in STABLE_COINS:
+#                 usd_value = amount
+#             else:
+#                 symbol = f"{asset}/USD"
+#                 ticker = await exchange.fetch_ticker(symbol)
+#                 price = ticker["last"]
+#                 usd_value = amount * price
 
-            portfolio_value += usd_value
-            asset_breakdown[asset] = round(usd_value, 2)
+#             portfolio_value += usd_value
+#             asset_breakdown[asset] = round(usd_value, 2)
 
-        ###For the total cost basis
-        trades = await exchange.fetch_my_trades()
-        for trade in trades:
-            if trade['side']=="buy":
-                cost = trade['cost']
-                if cost :
-                    total_cost_basis+=cost
-        unrealised_pl = portfolio_value - total_cost_basis
+#         ###For the total cost basis
+#         trades = await exchange.fetch_my_trades()
+#         for trade in trades:
+#             if trade['side']=="buy":
+#                 cost = trade['cost']
+#                 if cost :
+#                     total_cost_basis+=cost
+#         unrealised_pl = portfolio_value - total_cost_basis
 
 
-    finally:
-        if exchange:
-            await exchange.close()
+#     finally:
+#         if exchange:
+#             await exchange.close()
 
 
 
@@ -525,5 +525,44 @@ async def calculate_portfolio_metrics(base_currency="USD"):
     #         await exchange.close()
 
 # Run the calculation
-metrics = asyncio.run(calculate_total_trade_value())
-print(metrics)
+# metrics = asyncio.run(calculate_total_trade_value())
+# print(metrics)
+
+import asyncio
+import json
+import websockets
+
+COINBASE_WS_URL = "wss://advanced-trade-ws.coinbase.com"
+
+
+async def main():
+    print("🌍 Connecting to Coinbase Advanced Trade WebSocket...")
+
+    async with websockets.connect(
+        COINBASE_WS_URL,
+        ping_interval=20,
+        ping_timeout=20,
+    ) as ws:
+
+        print("✅ Connected!")
+
+        subscribe_message = {
+            "type": "subscribe",
+            "product_ids": ["ETH-USD"],
+            "channel": "candles"
+        }
+
+        print("📡 Sending subscribe message...")
+        await ws.send(json.dumps(subscribe_message))
+        print("📡 Subscribed to ETH-USD candles")
+
+        print("⏳ Listening for messages...\n")
+
+        async for message in ws:
+            print("📥 RAW MESSAGE:")
+            print(message)
+            print("-" * 60)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
