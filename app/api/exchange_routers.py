@@ -6,6 +6,10 @@ from sqlalchemy.future import select
 from app.auth.user import auth_user
 from app.coinbase.exchange import (
     buy_sell_order_execution,
+    calculate_dashboard,
+    fetch_all_orders,
+    fetch_close_orders,
+    fetch_open_orders,
     get_crypt_currencies,
     get_historical_data,
     get_historical_ohlc_data,
@@ -14,11 +18,6 @@ from app.coinbase.exchange import (
     get_total_coin_value,
     user_portfolio_data,
     validate_coinbase_api,
-    fetch_all_orders,
-    fetch_close_orders,
-    fetch_open_orders,
-    calculate_dashboard
-    
 )
 from app.db.session import get_async_session
 from app.models.user import User, UserExchange
@@ -271,18 +270,14 @@ async def total_account_value(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    data = await fetch_all_orders(
-        exchange_name.lower(),
-        symbol,
-        user,
-        db
-    )
+    data = await fetch_all_orders(exchange_name.lower(), symbol, user, db)
 
     return {
         "message": "Orders fetched successfully",
         "status_code": 200,
         "data": data,
     }
+
 
 @router.get("/portfolio/close/orders")
 async def total_account_value(
@@ -297,18 +292,15 @@ async def total_account_value(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    data = await fetch_close_orders(
-        exchange_name.lower(),
-        symbol,
-        user,
-        db
-    )
+    data = await fetch_close_orders(exchange_name.lower(), symbol, user, db)
 
     return {
         "message": "Orders fetched successfully",
         "status_code": 200,
         "data": data,
     }
+
+
 @router.get("/portfolio/open/orders")
 async def total_account_value(
     exchange_name: str,
@@ -417,10 +409,13 @@ async def get_ohlc_data(
         db=db,
     )
 
+
 @router.get("/get_profit_loss")
-async def dashboard_data(exchange_name: str,
-                         current_user: User = Security(auth_user.get_current_user), 
-                         db: AsyncSession = Depends(get_async_session)):
+async def dashboard_data(
+    exchange_name: str,
+    current_user: User = Security(auth_user.get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
     return await calculate_dashboard(
-        exchange_name=exchange_name,user=current_user,db=db
+        exchange_name=exchange_name, user=current_user, db=db
     )

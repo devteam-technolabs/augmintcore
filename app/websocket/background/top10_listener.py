@@ -9,8 +9,16 @@ logger = logging.getLogger(__name__)
 COINBASE_WS_URL = "wss://ws-feed.exchange.coinbase.com"
 
 TOP_10_PRODUCTS = [
-    "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD",
-    "ADA-USD", "DOGE-USD", "AVAX-USD", "LINK-USD", "MATIC-USD",
+    "BTC-USD",
+    "ETH-USD",
+    "SOL-USD",
+    "BNB-USD",
+    "XRP-USD",
+    "ADA-USD",
+    "DOGE-USD",
+    "AVAX-USD",
+    "LINK-USD",
+    "MATIC-USD",
 ]
 
 # Shared in-memory store — updated by listener, read by handler

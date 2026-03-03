@@ -446,87 +446,87 @@ async def get_total_account_value(exchange_name: str, user, db):
             await exchange.close()
 
 
-async def fetch_all_orders(
-    exchange_name: str,
-    symbol: str,
-    user,
-    db
-):
+async def fetch_all_orders(exchange_name: str, symbol: str, user, db):
     exchange = None
 
-    try: 
-        keys = await get_keys(exchange_name, user.id, db) 
-        api_key = keys["api_key"] 
-        api_secret = keys["api_secret"] 
-        passphrase = keys.get("passphrase") 
-        exchange = await get_working_coinbase_exchange( api_key, api_secret, passphrase, ) 
-        if not exchange: 
-            raise RuntimeError("No valid Coinbase exchange found") 
-        exchange.options["adjustForTimeDifference"] = True 
-        orders = await exchange.fetch_orders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
-        return orders 
-    except Exception as e: 
-        print(f"❌ Failed to fetch account value: {e}") 
-        raise 
-    finally: 
-        if exchange: 
+    try:
+        keys = await get_keys(exchange_name, user.id, db)
+        api_key = keys["api_key"]
+        api_secret = keys["api_secret"]
+        passphrase = keys.get("passphrase")
+        exchange = await get_working_coinbase_exchange(
+            api_key,
+            api_secret,
+            passphrase,
+        )
+        if not exchange:
+            raise RuntimeError("No valid Coinbase exchange found")
+        exchange.options["adjustForTimeDifference"] = True
+        orders = await exchange.fetch_orders(
+            symbol=symbol, since=None, limit=200, params={"paginate": True}
+        )
+        return orders
+    except Exception as e:
+        print(f"❌ Failed to fetch account value: {e}")
+        raise
+    finally:
+        if exchange:
             await exchange.close()
 
 
-async def fetch_open_orders(
-    exchange_name: str,
-    symbol: str,
-    user,
-    db
-):
+async def fetch_open_orders(exchange_name: str, symbol: str, user, db):
     exchange = None
 
-    try: 
-        keys = await get_keys(exchange_name, user.id, db) 
-        api_key = keys["api_key"] 
-        api_secret = keys["api_secret"] 
-        passphrase = keys.get("passphrase") 
-        exchange = await get_working_coinbase_exchange( api_key, api_secret, passphrase, ) 
-        if not exchange: 
-            raise RuntimeError("No valid Coinbase exchange found") 
-        exchange.options["adjustForTimeDifference"] = True 
-        orders = await exchange.fetchOpenOrders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
-        return orders 
-    except Exception as e: 
-        print(f"❌ Failed to fetch account value: {e}") 
-        raise 
-    finally: 
-        if exchange: 
+    try:
+        keys = await get_keys(exchange_name, user.id, db)
+        api_key = keys["api_key"]
+        api_secret = keys["api_secret"]
+        passphrase = keys.get("passphrase")
+        exchange = await get_working_coinbase_exchange(
+            api_key,
+            api_secret,
+            passphrase,
+        )
+        if not exchange:
+            raise RuntimeError("No valid Coinbase exchange found")
+        exchange.options["adjustForTimeDifference"] = True
+        orders = await exchange.fetchOpenOrders(
+            symbol=symbol, since=None, limit=200, params={"paginate": True}
+        )
+        return orders
+    except Exception as e:
+        print(f"❌ Failed to fetch account value: {e}")
+        raise
+    finally:
+        if exchange:
             await exchange.close()
 
 
-
-
-
-async def fetch_close_orders(
-    exchange_name: str,
-    symbol: str,
-    user,
-    db
-):
+async def fetch_close_orders(exchange_name: str, symbol: str, user, db):
     exchange = None
 
-    try: 
-        keys = await get_keys(exchange_name, user.id, db) 
-        api_key = keys["api_key"] 
-        api_secret = keys["api_secret"] 
-        passphrase = keys.get("passphrase") 
-        exchange = await get_working_coinbase_exchange( api_key, api_secret, passphrase, ) 
-        if not exchange: 
-            raise RuntimeError("No valid Coinbase exchange found") 
-        exchange.options["adjustForTimeDifference"] = True 
-        orders = await exchange.fetchClosedOrders( symbol=symbol, since=None, limit=200, params={ "paginate": True } ) 
-        return orders 
-    except Exception as e: 
-        print(f"❌ Failed to fetch account value: {e}") 
-        raise 
-    finally: 
-        if exchange: 
+    try:
+        keys = await get_keys(exchange_name, user.id, db)
+        api_key = keys["api_key"]
+        api_secret = keys["api_secret"]
+        passphrase = keys.get("passphrase")
+        exchange = await get_working_coinbase_exchange(
+            api_key,
+            api_secret,
+            passphrase,
+        )
+        if not exchange:
+            raise RuntimeError("No valid Coinbase exchange found")
+        exchange.options["adjustForTimeDifference"] = True
+        orders = await exchange.fetchClosedOrders(
+            symbol=symbol, since=None, limit=200, params={"paginate": True}
+        )
+        return orders
+    except Exception as e:
+        print(f"❌ Failed to fetch account value: {e}")
+        raise
+    finally:
+        if exchange:
             await exchange.close()
 
 
@@ -598,7 +598,7 @@ async def buy_sell_order_execution(
 
         required_cost = None
         if order_type == "market" and side == "buy":
-            required_cost = quantity * ticker_price * 1.01  # 1% buffer 
+            required_cost = quantity * ticker_price * 1.01  # 1% buffer
 
             if (
                 quote == "USD"
@@ -663,14 +663,13 @@ async def buy_sell_order_execution(
             market = exchange.market(symbol)
 
             min_amount = market["limits"]["amount"]["min"]
-            
+
             price = float(exchange.price_to_precision(symbol, limit_price))
-            if side =="buy":
+            if side == "buy":
                 base_amount = quantity / price
                 total_btc = float(exchange.amount_to_precision(symbol, base_amount))
-            else :
+            else:
                 total_btc = float(exchange.amount_to_precision(symbol, quantity))
-          
 
             print(f"LIMIT ORDER → {side.upper()} {total_btc} {symbol} @ {price}")
             if total_btc < min_amount:
@@ -683,7 +682,7 @@ async def buy_sell_order_execution(
                 side=side,
                 amount=total_btc,  # BASE quantity
                 price=price,
-               # LIMIT price (NOT total_cost)
+                # LIMIT price (NOT total_cost)
             )
 
         # ─────────────────────────────────────────────
@@ -893,6 +892,7 @@ TIMEFRAME_CONFIG = {
     "1d": {"days": 30, "candle_minutes": 1440},
 }
 
+
 async def fetch_from_binance(
     target_symbol,
     timeframe,
@@ -935,6 +935,7 @@ async def fetch_from_binance(
     finally:
         await exchange.close()
         print("binance connection closed")
+
 
 async def fetch_from_exchange(
     exchange_class,
@@ -981,6 +982,7 @@ async def fetch_from_exchange(
     finally:
         await exchange.close()
         print(f"{exchange_class.__name__} connection closed")
+
 
 async def get_historical_ohlc_data(
     user,
@@ -1145,23 +1147,26 @@ async def fetch_orderbook_async(symbol: str, user=None, db=None):
     )
     return exchange
 
-async def get_real_profit_loss(exchange_name: str, user, db: AsyncSession,base_currency='USD'):
-    try :
+
+async def get_real_profit_loss(
+    exchange_name: str, user, db: AsyncSession, base_currency="USD"
+):
+    try:
         exchange = None
 
         keys = await get_keys(exchange_name, user.id, db)
 
         exchange = ccxt.coinbaseexchange(
-                {
-                    "apiKey": keys["api_key"],
-                    "secret": keys["api_secret"],
-                    "password": keys["passphrase"],
-                    "enableRateLimit": True,
-                }
-            )
-        
+            {
+                "apiKey": keys["api_key"],
+                "secret": keys["api_secret"],
+                "password": keys["passphrase"],
+                "enableRateLimit": True,
+            }
+        )
+
         balance = exchange.fetch_balance()
-        holdings = {curr: amt for curr, amt in balance['total'].items() if amt > 0}
+        holdings = {curr: amt for curr, amt in balance["total"].items() if amt > 0}
         total_portfolio_value = 0.0
         portfolio_value_24h_ago = 0.0
 
@@ -1171,58 +1176,65 @@ async def get_real_profit_loss(exchange_name: str, user, db: AsyncSession,base_c
             continue
 
         symbol = f"{currency}/{base_currency}"
-                
+
         try:
             # Fetch 24h ticker data
             ticker = exchange.fetch_ticker(symbol)
-            current_price =ticker['last']
-            open_price =ticker['open']
-            total_portfolio_value += (amount * current_price)
+            current_price = ticker["last"]
+            open_price = ticker["open"]
+            total_portfolio_value += amount * current_price
             if open_price:
-                portfolio_value_24h_ago += (amount * open_price)
+                portfolio_value_24h_ago += amount * open_price
             else:
                 # Fallback if 'open' isn't provided by the exchange
-                portfolio_value_24h_ago += (amount * current_price)
+                portfolio_value_24h_ago += amount * current_price
         except ccxt.BadSymbol:
             print(f"Skipping {symbol} - not found on Coinbase.")
         except Exception as e:
             print(f"Error fetching ticker for {symbol}: {e}")
         pl_24h = total_portfolio_value - portfolio_value_24h_ago
-        pl_24h_percentage = (pl_24h / portfolio_value_24h_ago) * 100 if portfolio_value_24h_ago > 0 else 0
+        pl_24h_percentage = (
+            (pl_24h / portfolio_value_24h_ago) * 100
+            if portfolio_value_24h_ago > 0
+            else 0
+        )
 
         total_cost_basis = 0.0
         for currency in holdings.keys():
-                if currency == base_currency: continue
-                
-                symbol = f"{currency}/{base_currency}"
-                try:
-                        # Fetch historical trades for this specific pair
-                    trades = exchange.fetch_my_trades(symbol)
-                        
-                    for trade in trades:
-                        if trade['side'] == 'buy':
-                                # Cost includes the fee
-                            total_cost_basis += trade['cost'] 
-                        elif trade['side'] == 'sell':
-                                # Deduct proportional cost (simplified average method)
-                                # More complex FIFO logic is needed for strict accounting
-                            total_cost_basis -= trade['cost']
-                                
-                except Exception as e:
-                        print(f"Could not fetch trades for {symbol}: {e}")
+            if currency == base_currency:
+                continue
 
-                # 4. Calculate Total P/L
-                total_pl = total_portfolio_value - total_cost_basis
-                total_pl_percentage = (total_pl / total_cost_basis) * 100 if total_cost_basis > 0 else 0
+            symbol = f"{currency}/{base_currency}"
+            try:
+                # Fetch historical trades for this specific pair
+                trades = exchange.fetch_my_trades(symbol)
 
-                return {
-                    "Total Portfolio Value": round(total_portfolio_value, 2),
-                    "P/L 24h ($)": round(pl_24h, 2),
-                    "P/L 24h (%)": round(pl_24h_percentage, 2),
-                    "Cost Basis": round(total_cost_basis, 2),
-                    "Total P/L ($)": round(total_pl, 2),
-                    "Total P/L (%)": round(total_pl_percentage, 2)
-                }
+                for trade in trades:
+                    if trade["side"] == "buy":
+                        # Cost includes the fee
+                        total_cost_basis += trade["cost"]
+                    elif trade["side"] == "sell":
+                        # Deduct proportional cost (simplified average method)
+                        # More complex FIFO logic is needed for strict accounting
+                        total_cost_basis -= trade["cost"]
+
+            except Exception as e:
+                print(f"Could not fetch trades for {symbol}: {e}")
+
+            # 4. Calculate Total P/L
+            total_pl = total_portfolio_value - total_cost_basis
+            total_pl_percentage = (
+                (total_pl / total_cost_basis) * 100 if total_cost_basis > 0 else 0
+            )
+
+            return {
+                "Total Portfolio Value": round(total_portfolio_value, 2),
+                "P/L 24h ($)": round(pl_24h, 2),
+                "P/L 24h (%)": round(pl_24h_percentage, 2),
+                "Cost Basis": round(total_cost_basis, 2),
+                "Total P/L ($)": round(total_pl, 2),
+                "Total P/L (%)": round(total_pl_percentage, 2),
+            }
 
     except ccxt.NetworkError as e:
         print(f"Network error: {e}")
@@ -1230,15 +1242,13 @@ async def get_real_profit_loss(exchange_name: str, user, db: AsyncSession,base_c
         print(f"Exchange error: {e}")
 
 
-async def calculate_dashboard(exchange_name:str,user,db: AsyncSession):
+async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
     exchange = None
     keys = await get_keys(exchange_name, user.id, db)
 
     try:
         exchange = await get_working_coinbase_exchange(
-            keys["api_key"],
-            keys["api_secret"],
-            keys.get("passphrase", "")
+            keys["api_key"], keys["api_secret"], keys.get("passphrase", "")
         )
 
         balance = (
@@ -1252,7 +1262,7 @@ async def calculate_dashboard(exchange_name:str,user,db: AsyncSession):
         portfolio_value = 0.0
         total_cost_basis = 0.0
         asset_breakdown = {}
-        asset_amount ={}
+        asset_amount = {}
 
         for asset, amount in total_assets_balance.items():
             if amount == 0:
@@ -1261,7 +1271,7 @@ async def calculate_dashboard(exchange_name:str,user,db: AsyncSession):
             if asset in STABLE_COINS:
                 usd_value = amount
             else:
-               
+
                 symbol = f"{asset}/USD"
                 ticker = await exchange.fetch_ticker(symbol)
                 usd_value = amount * ticker["last"]
@@ -1274,20 +1284,19 @@ async def calculate_dashboard(exchange_name:str,user,db: AsyncSession):
         ###For the total unrealized P/L and the cost basis
         trades = await exchange.fetch_my_trades()
         for trade in trades:
-            if trade['side']=="buy":
-                cost = trade['cost']
-                if cost :
-                    total_cost_basis+=cost
+            if trade["side"] == "buy":
+                cost = trade["cost"]
+                if cost:
+                    total_cost_basis += cost
         unrealised_pl = portfolio_value - total_cost_basis
         return {
-            "total_portfolio_value":round(portfolio_value,2),
-            "total_asset_breakdown":asset_breakdown,
-            "total_unrealized_p/l":round(unrealised_pl,2),
-            "total_cost_basis":round(total_cost_basis,2),
-            "total_asset_amount":asset_amount
+            "total_portfolio_value": round(portfolio_value, 2),
+            "total_asset_breakdown": asset_breakdown,
+            "total_unrealized_p/l": round(unrealised_pl, 2),
+            "total_cost_basis": round(total_cost_basis, 2),
+            "total_asset_amount": asset_amount,
         }
 
     finally:
         if exchange:
             await exchange.close()
-

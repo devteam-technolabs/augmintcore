@@ -5,8 +5,8 @@ import logging
 import ccxt.async_support as ccxt
 from fastapi import WebSocket
 
-from app.services.coinbase_credentials import get_coinbase_credentials
 from app.coinbase.exchange import get_keys
+from app.services.coinbase_credentials import get_coinbase_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +21,19 @@ async def build_exchange(user_id: int, db):
 
     print("DEBUG: keys received", keys)
 
-    exchange = ccxt.coinbaseexchange({
-        "apiKey": keys["api_key"],
-        "secret": keys["api_secret"],
-        "password": keys["passphrase"],
-        "enableRateLimit": True,
-    })
+    exchange = ccxt.coinbaseexchange(
+        {
+            "apiKey": keys["api_key"],
+            "secret": keys["api_secret"],
+            "password": keys["passphrase"],
+            "enableRateLimit": True,
+        }
+    )
 
     print("DEBUG: exchange created")
 
     return exchange
+
 
 async def handle_order_book(
     websocket: WebSocket,

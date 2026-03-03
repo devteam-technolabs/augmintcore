@@ -1,4 +1,8 @@
 import asyncio
+import json
+
+import websockets
+
 # # import websockets
 # # import json
 
@@ -352,14 +356,12 @@ import asyncio
 # from app.coinbase.coinbase_cctx import get_working_coinbase_exchange
 
 
-
-
 # keys = {
 #         "api_key": "organizations/dce12743-0903-4c2b-88d4-49ad95cce694/apiKeys/e891dae7-04ce-4f09-b430-7e21faa70a72",
 #         "api_secret": '-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIJ9kz/KWvnsto9q1xOGkLP08c4mmtIipH0YhM7QBeNT9oAoGCCqGSM49\nAwEHoUQDQgAEpodAXPGHGejhvpc5CQ7Is4gIzJuTcUas+UGTk99l4oOnpTNZCyyD\n7BYgYPBqmwc0LDaGvcth2QUIz/Z6QiglDg==\n-----END EC PRIVATE KEY-----\n',
 #         "passphrase": None,
 #     }
-            
+
 # api_key = keys["api_key"]
 # api_secret = keys["api_secret"]
 # passphrase = keys.get("passphrase")
@@ -439,98 +441,94 @@ import asyncio
 #             await exchange.close()
 
 
+#     print(balance)
+#     holdings = {curr: amt for curr, amt in balance['total'].items() if amt > 0}
 
-    #     print(balance)
-    #     holdings = {curr: amt for curr, amt in balance['total'].items() if amt > 0}
-        
-    #     total_portfolio_value = 0.0
-    #     portfolio_value_24h_ago = 0.0
+#     total_portfolio_value = 0.0
+#     portfolio_value_24h_ago = 0.0
 
-    #     # 1. Calculate Total Value and 24h P/L
-    #     for currency, amount in holdings.items():
-    #         if currency == base_currency:
-    #             # If holding USD, just add the raw amount
-    #             total_portfolio_value += amount
-    #             portfolio_value_24h_ago += amount
-    #             continue # Skip the ticker fetch for USD
-                
-    #         symbol = f"{currency}/{base_currency}"
-                    
-    #         try:
-    #             # Fetch 24h ticker data
-    #             ticker = await exchange.fetch_ticker(symbol)
-                
-    #             # Safely get prices, defaulting to 0 if missing
-    #             current_price = ticker.get('last', 0)
-    #             open_price = ticker.get('open', 0)
-                
-    #             # Multiply amount by price!
-    #             total_portfolio_value += (amount * current_price)
-                
-    #             if open_price:
-    #                 portfolio_value_24h_ago += (amount * open_price)
-    #             else:
-    #                 # Fallback if 'open' isn't provided
-    #                 portfolio_value_24h_ago += (amount * current_price)
-                    
-    #         except ccxt.BadSymbol:
-    #             print(f"Skipping {symbol} - not found on Coinbase.")
-    #         except Exception as e:
-    #             print(f"Error fetching ticker for {symbol}: {e}")
-                
-    #     # Calculate 24h differences outside the loop
-    #     pl_24h = total_portfolio_value - portfolio_value_24h_ago
-    #     pl_24h_percentage = (pl_24h / portfolio_value_24h_ago) * 100 if portfolio_value_24h_ago > 0 else 0
+#     # 1. Calculate Total Value and 24h P/L
+#     for currency, amount in holdings.items():
+#         if currency == base_currency:
+#             # If holding USD, just add the raw amount
+#             total_portfolio_value += amount
+#             portfolio_value_24h_ago += amount
+#             continue # Skip the ticker fetch for USD
 
-    #     # 2. Calculate Cost Basis
-    #     total_cost_basis = 0.0
-    #     for currency in holdings.keys():
-    #         if currency == base_currency: 
-    #             continue
-                
-    #         symbol = f"{currency}/{base_currency}"
-    #         try:
-    #             # Fetch historical trades for this specific pair
-    #             trades = await exchange.fetch_my_trades(symbol)
-                    
-    #             for trade in trades:
-    #                 if trade['side'] == 'buy':
-    #                     total_cost_basis += trade['cost'] 
-    #                 elif trade['side'] == 'sell':
-    #                     total_cost_basis -= trade['cost']
-                            
-    #         except Exception as e:
-    #             print(f"Could not fetch trades for {symbol}: {e}")
+#         symbol = f"{currency}/{base_currency}"
 
-    #     # 3. Calculate Total P/L (Outside the loop!)
-    #     total_pl = total_portfolio_value - total_cost_basis
-    #     total_pl_percentage = (total_pl / total_cost_basis) * 100 if total_cost_basis > 0 else 0
+#         try:
+#             # Fetch 24h ticker data
+#             ticker = await exchange.fetch_ticker(symbol)
 
-    #     return {
-    #         "Total Portfolio Value": round(total_portfolio_value, 2),
-    #         "P/L 24h ($)": round(pl_24h, 2),
-    #         "P/L 24h (%)": round(pl_24h_percentage, 2),
-    #         "Cost Basis": round(total_cost_basis, 2),
-    #         "Total P/L ($)": round(total_pl, 2),
-    #         "Total P/L (%)": round(total_pl_percentage, 2)
-    #     }
+#             # Safely get prices, defaulting to 0 if missing
+#             current_price = ticker.get('last', 0)
+#             open_price = ticker.get('open', 0)
 
-    # except ccxt.NetworkError as e:
-    #     print(f"Network error: {e}")
-    # except ccxt.ExchangeError as e:
-    #     print(f"Exchange error: {e}")
-    # finally:
-    #     # THIS FIXES THE WARNING: Always close the connection
-    #     if exchange is not None:
-    #         await exchange.close()
+#             # Multiply amount by price!
+#             total_portfolio_value += (amount * current_price)
+
+#             if open_price:
+#                 portfolio_value_24h_ago += (amount * open_price)
+#             else:
+#                 # Fallback if 'open' isn't provided
+#                 portfolio_value_24h_ago += (amount * current_price)
+
+#         except ccxt.BadSymbol:
+#             print(f"Skipping {symbol} - not found on Coinbase.")
+#         except Exception as e:
+#             print(f"Error fetching ticker for {symbol}: {e}")
+
+#     # Calculate 24h differences outside the loop
+#     pl_24h = total_portfolio_value - portfolio_value_24h_ago
+#     pl_24h_percentage = (pl_24h / portfolio_value_24h_ago) * 100 if portfolio_value_24h_ago > 0 else 0
+
+#     # 2. Calculate Cost Basis
+#     total_cost_basis = 0.0
+#     for currency in holdings.keys():
+#         if currency == base_currency:
+#             continue
+
+#         symbol = f"{currency}/{base_currency}"
+#         try:
+#             # Fetch historical trades for this specific pair
+#             trades = await exchange.fetch_my_trades(symbol)
+
+#             for trade in trades:
+#                 if trade['side'] == 'buy':
+#                     total_cost_basis += trade['cost']
+#                 elif trade['side'] == 'sell':
+#                     total_cost_basis -= trade['cost']
+
+#         except Exception as e:
+#             print(f"Could not fetch trades for {symbol}: {e}")
+
+#     # 3. Calculate Total P/L (Outside the loop!)
+#     total_pl = total_portfolio_value - total_cost_basis
+#     total_pl_percentage = (total_pl / total_cost_basis) * 100 if total_cost_basis > 0 else 0
+
+#     return {
+#         "Total Portfolio Value": round(total_portfolio_value, 2),
+#         "P/L 24h ($)": round(pl_24h, 2),
+#         "P/L 24h (%)": round(pl_24h_percentage, 2),
+#         "Cost Basis": round(total_cost_basis, 2),
+#         "Total P/L ($)": round(total_pl, 2),
+#         "Total P/L (%)": round(total_pl_percentage, 2)
+#     }
+
+# except ccxt.NetworkError as e:
+#     print(f"Network error: {e}")
+# except ccxt.ExchangeError as e:
+#     print(f"Exchange error: {e}")
+# finally:
+#     # THIS FIXES THE WARNING: Always close the connection
+#     if exchange is not None:
+#         await exchange.close()
 
 # Run the calculation
 # metrics = asyncio.run(calculate_total_trade_value())
 # print(metrics)
 
-import asyncio
-import json
-import websockets
 
 COINBASE_WS_URL = "wss://advanced-trade-ws.coinbase.com"
 
@@ -549,7 +547,7 @@ async def main():
         subscribe_message = {
             "type": "subscribe",
             "product_ids": ["ETH-USD"],
-            "channel": "candles"
+            "channel": "candles",
         }
 
         print("📡 Sending subscribe message...")

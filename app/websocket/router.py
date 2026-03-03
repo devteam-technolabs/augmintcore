@@ -1,18 +1,19 @@
 import asyncio
 import json
-import traceback
 import logging
+import traceback
+
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.exchange_routers import calculate_dashboard
 from app.auth.user import get_user_from_token
+from app.core.redis import redis_client  # your existing redis client
 from app.db.session import get_async_session
-from app.websocket.handlers.market_price import handle_market_price, change_symbol
+from app.websocket.background.redis_utils import get_cached_dashboard
+from app.websocket.handlers.market_price import handle_market_price
 from app.websocket.handlers.order_book import handle_order_book
 from app.websocket.handlers.top_10 import handle_top_10
-from app.websocket.background.redis_utils import get_cached_dashboard
-from app.api.exchange_routers import calculate_dashboard
-from app.core.redis import redis_client  # your existing redis client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["Market WebSocket"])
@@ -62,7 +63,7 @@ async def unified_market_ws(
             print("❌ Invalid token")
             await websocket.close()
             return
-        
+
     except asyncio.TimeoutError:
         await websocket.send_json({"error": "Auth timeout"})
         await websocket.close()
@@ -109,10 +110,17 @@ async def unified_market_ws(
 
             # --- market_price ---
             if msg_type == "subscribe_market_price":
+                # cancel_task("market_price")
+                # if symbol != current_symbol:
+                #     current_symbol = symbol
+                #     await change_symbol(user_id, current_symbol)
+                # active_tasks["market_price"] = asyncio.create_task(
+                #     handle_market_price(websocket, user_id, current_symbol)
+                # )
                 cancel_task("market_price")
-                if symbol != current_symbol:
-                    current_symbol = symbol
-                    await change_symbol(user_id, current_symbol)
+
+                current_symbol = symbol
+
                 active_tasks["market_price"] = asyncio.create_task(
                     handle_market_price(websocket, user_id, current_symbol)
                 )
@@ -145,9 +153,7 @@ async def unified_market_ws(
             # --- top 10 ---
             elif msg_type == "subscribe_top_10":
                 cancel_task("top_10")
-                active_tasks["top_10"] = asyncio.create_task(
-                    handle_top_10(websocket)
-                )
+                active_tasks["top_10"] = asyncio.create_task(handle_top_10(websocket))
 
             # --- unsubscribe any ---
             elif msg_type == "unsubscribe":
@@ -158,13 +164,26 @@ async def unified_market_ws(
 
             # --- change symbol across all active subscriptions ---
             elif msg_type == "change_symbol":
+                # current_symbol = symbol
+                # if "market_price" in active_tasks:
+                #     cancel_task("market_price")
+                #     await change_symbol(user_id, current_symbol)
+                #     active_tasks["market_price"] = asyncio.create_task(
+                #         handle_market_price(websocket, user_id, current_symbol)
+                #     )
+                # if "order_book" in active_tasks:
+                #     cancel_task("order_book")
+                #     active_tasks["order_book"] = asyncio.create_task(
+                #         handle_order_book(websocket, user.id, db, current_symbol)
+                #     )
+
                 current_symbol = symbol
                 if "market_price" in active_tasks:
                     cancel_task("market_price")
-                    await change_symbol(user_id, current_symbol)
                     active_tasks["market_price"] = asyncio.create_task(
                         handle_market_price(websocket, user_id, current_symbol)
                     )
+
                 if "order_book" in active_tasks:
                     cancel_task("order_book")
                     active_tasks["order_book"] = asyncio.create_task(
@@ -185,20 +204,23 @@ async def unified_market_ws(
         print("🔴 WebSocket closed")
 
         # cancel market_price worker for this user
-        from app.websocket.background.coinbase_worker import active_workers
+        # from app.websocket.background.coinbase_worker import active_workers
 
-        worker_task = active_workers.pop(user_id, None)
-        if worker_task and not worker_task.done():
-            print("🛑 Cancelling CoinbaseWorker for user:", user_id)
-            worker_task.cancel()
-            try:
-                await worker_task
-            except asyncio.CancelledError:
-                print("✅ Worker cancelled successfully")
+        # worker_task = active_workers.pop(user_id, None)
+        # if worker_task and not worker_task.done():
+        #     print("🛑 Cancelling CoinbaseWorker for user:", user_id)
+        #     worker_task.cancel()
+        #     try:
+        #         await worker_task
+        #     except asyncio.CancelledError:
+        #         print("✅ Worker cancelled successfully")
 
 
 @router.websocket("/ws/dashboard")
-async def dashboard_ws(websocket: WebSocket,db: AsyncSession = Depends(get_async_session),):
+async def dashboard_ws(
+    websocket: WebSocket,
+    db: AsyncSession = Depends(get_async_session),
+):
     await websocket.accept()
     try:
         auth_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10)
@@ -218,7 +240,7 @@ async def dashboard_ws(websocket: WebSocket,db: AsyncSession = Depends(get_async
             print("Invalid token")
             await websocket.close()
             return
-        
+
     except asyncio.TimeoutError:
         await websocket.send_json({"error": "Auth timeout"})
         await websocket.close()
@@ -232,9 +254,7 @@ async def dashboard_ws(websocket: WebSocket,db: AsyncSession = Depends(get_async
     try:
         while True:
             data = await get_cached_dashboard(
-                user_id,
-                redis,
-                lambda: calculate_dashboard("coinbase", user, db)
+                user_id, redis, lambda: calculate_dashboard("coinbase", user, db)
             )
 
             await websocket.send_json(data)

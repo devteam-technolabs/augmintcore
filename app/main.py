@@ -20,9 +20,6 @@ from app.api.exchange_routers import router as exchange_routers
 from app.api.payment_routes import router as payment_router
 from app.api.router import router as api_router
 from app.api.settings_routers import settings_router
-# from app.api.websocket_routers import coinbase_ws_listener
-# from app.api.websocket_routers import router as websocket_router
-from app.websocket.router import router as ws_router
 from app.core import events
 from app.core.config import get_settings
 from app.core.exception_handlers import (
@@ -30,7 +27,14 @@ from app.core.exception_handlers import (
     custom_http_exception_handler,
 )
 from app.db.session import engine
-from app.websocket.background.top10_listener import top10_coinbase_listener, stop_top10_listener
+from app.websocket.background.top10_listener import (
+    stop_top10_listener,
+    top10_coinbase_listener,
+)
+
+# from app.api.websocket_routers import coinbase_ws_listener
+# from app.api.websocket_routers import router as websocket_router
+from app.websocket.router import router as ws_router
 
 settings = get_settings()
 logger = logging.getLogger(__name__)

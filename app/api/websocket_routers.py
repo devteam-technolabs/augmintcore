@@ -390,6 +390,3 @@ COINBASE_WS_URL = "wss://ws-feed.exchange.coinbase.com"
 #     finally:
 #         await pubsub.unsubscribe(f"user:{user_id}")
 #         await pubsub.close()
-
-
-
