@@ -39,6 +39,7 @@ async def handle_market_price(
         print("🔥 market_price error:", e)
 
     finally:
+        print(f"❌ WebSocket closed for {symbol}")
         await pubsub.unsubscribe(channel)
         await pubsub.aclose()
         await remove_symbol_subscriber(symbol)
