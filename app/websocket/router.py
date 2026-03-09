@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.exchange_routers import calculate_dashboard
 from app.auth.user import get_user_from_token
-from app.core.redis import redis_client  # your existing redis client
+from app.core.redis import redis_client
 from app.db.session import get_async_session
 from app.websocket.background.redis_utils import get_cached_dashboard
 from app.websocket.handlers.market_price import handle_market_price

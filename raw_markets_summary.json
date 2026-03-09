@@ -1,0 +1,217 @@
+{
+    "first_market_sample": {
+        "id": "BTC-USD",
+        "lowercaseId": null,
+        "symbol": "BTC/USD",
+        "base": "BTC",
+        "quote": "USD",
+        "settle": null,
+        "baseId": "BTC",
+        "quoteId": "USD",
+        "settleId": null,
+        "type": "spot",
+        "spot": true,
+        "margin": null,
+        "swap": false,
+        "future": false,
+        "option": false,
+        "index": false,
+        "active": true,
+        "contract": false,
+        "linear": null,
+        "inverse": null,
+        "subType": null,
+        "taker": 0.012,
+        "maker": 0.006,
+        "contractSize": null,
+        "expiry": null,
+        "expiryDatetime": null,
+        "strike": null,
+        "optionType": null,
+        "precision": {
+            "amount": 1e-08,
+            "price": 0.01,
+            "cost": null,
+            "base": null,
+            "quote": null
+        },
+        "limits": {
+            "leverage": {
+                "min": null,
+                "max": null
+            },
+            "amount": {
+                "min": 1e-08,
+                "max": 3400.0
+            },
+            "price": {
+                "min": null,
+                "max": null
+            },
+            "cost": {
+                "min": 1.0,
+                "max": 150000000.0
+            }
+        },
+        "marginModes": {
+            "cross": null,
+            "isolated": null
+        },
+        "created": null,
+        "info": {
+            "product_id": "BTC-USD",
+            "price": "70356.47",
+            "price_percentage_change_24h": "-2.95971177753874",
+            "volume_24h": "10916.55318913",
+            "volume_percentage_change_24h": "-46.83997175699743",
+            "base_increment": "0.00000001",
+            "quote_increment": "0.01",
+            "quote_min_size": "1",
+            "quote_max_size": "150000000",
+            "base_min_size": "0.00000001",
+            "base_max_size": "3400",
+            "base_name": "Bitcoin",
+            "quote_name": "US Dollar",
+            "watched": false,
+            "is_disabled": false,
+            "new": false,
+            "status": "online",
+            "cancel_only": false,
+            "limit_only": false,
+            "post_only": false,
+            "trading_disabled": false,
+            "auction_mode": false,
+            "product_type": "SPOT",
+            "quote_currency_id": "USD",
+            "base_currency_id": "BTC",
+            "fcm_trading_session_details": null,
+            "mid_market_price": "",
+            "alias": "",
+            "alias_to": [
+                "BTC-USDC"
+            ],
+            "base_display_symbol": "BTC",
+            "quote_display_symbol": "USD",
+            "view_only": false,
+            "price_increment": "0.01",
+            "display_name": "BTC-USD",
+            "product_venue": "CBE",
+            "approximate_quote_24h_volume": "768050146.95",
+            "new_at": "2023-01-01T00:00:00Z",
+            "market_cap": "",
+            "base_cbrn": "",
+            "quote_cbrn": "",
+            "product_cbrn": "",
+            "icon_color": "",
+            "icon_url": "",
+            "display_name_overwrite": "",
+            "is_alpha_testing": false,
+            "about_description": ""
+        },
+        "tierBased": true,
+        "percentage": true,
+        "tiers": {
+            "taker": [
+                [
+                    0.0,
+                    0.006
+                ],
+                [
+                    10000.0,
+                    0.004
+                ],
+                [
+                    50000.0,
+                    0.0025
+                ],
+                [
+                    100000.0,
+                    0.002
+                ],
+                [
+                    1000000.0,
+                    0.0018
+                ],
+                [
+                    15000000.0,
+                    0.0016
+                ],
+                [
+                    75000000.0,
+                    0.0012
+                ],
+                [
+                    250000000.0,
+                    0.0008
+                ],
+                [
+                    400000000.0,
+                    0.0005
+                ]
+            ],
+            "maker": [
+                [
+                    0.0,
+                    0.004
+                ],
+                [
+                    10000.0,
+                    0.0025
+                ],
+                [
+                    50000.0,
+                    0.0015
+                ],
+                [
+                    100000.0,
+                    0.001
+                ],
+                [
+                    1000000.0,
+                    0.0008
+                ],
+                [
+                    15000000.0,
+                    0.0006
+                ],
+                [
+                    75000000.0,
+                    0.0003
+                ],
+                [
+                    250000000.0,
+                    0.0
+                ],
+                [
+                    400000000.0,
+                    0.0
+                ]
+            ]
+        },
+        "alias": "BTC-USDC"
+    },
+    "total_markets": 1158,
+    "markets_keys_sample": [
+        "BTC/USD",
+        "BTC/USDC",
+        "ETH/USD",
+        "ETH/USDC",
+        "XRP/USD",
+        "XRP/USDC",
+        "SOL/USD",
+        "SOL/USDC",
+        "USDC/EUR",
+        "USDT/USD",
+        "BTC/EUR",
+        "LINK/USD",
+        "LINK/USDC",
+        "USDC/GBP",
+        "SUI/USD",
+        "SUI/USDC",
+        "DOGE/USD",
+        "DOGE/USDC",
+        "ZEC/USD",
+        "ZEC/USDC"
+    ],
+    "full_markets_structure": "Paste the first_market_sample below to analyze"
+}

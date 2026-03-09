@@ -6,7 +6,7 @@ import traceback
 from fastapi import WebSocket
 
 from app.core.redis import redis_client
-from app.websocket.background.coinbase_worker import ensure_symbol_worker
+from app.websocket.background.coinbase_worker import ensure_symbol_worker, remove_symbol_subscriber
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ async def handle_market_price(
 ):
     symbol = symbol.upper()
 
-    # 🔥 Ensure symbol worker exists
+    # Ensure symbol worker exists
     await ensure_symbol_worker(symbol)
 
     pubsub = redis_client.pubsub()
@@ -41,3 +41,4 @@ async def handle_market_price(
     finally:
         await pubsub.unsubscribe(channel)
         await pubsub.aclose()
+        await remove_symbol_subscriber(symbol)
