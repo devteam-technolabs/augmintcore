@@ -18,7 +18,7 @@ from fastapi import Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
+from app.models.user import PortfolioSnapshot
 from app.auth.user import auth_user
 from app.coinbase.coinbase_cctx import get_working_coinbase_exchange
 
@@ -1251,14 +1251,11 @@ async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
             keys["api_key"], keys["api_secret"], keys.get("passphrase", "")
         )
 
-        balance = (
-            exchange._cached_validation_balance
-            if hasattr(exchange, "_cached_validation_balance")
-            else await exchange.fetch_balance()
-        )
+        balance = await exchange.fetch_balance()
         total_assets_balance = balance["total"]
+
         STABLE_COINS = {"USDC", "USDT"}
-        # tickers = await exchange.fetch_ticker()
+
         portfolio_value = 0.0
         total_cost_basis = 0.0
         asset_breakdown = {}
@@ -1271,28 +1268,55 @@ async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
             if asset in STABLE_COINS:
                 usd_value = amount
             else:
-
                 symbol = f"{asset}/USD"
-                ticker = await exchange.fetch_ticker(symbol)
-                usd_value = amount * ticker["last"]
-                # usd_value = amount * price
+                try:
+                    ticker = await exchange.fetch_ticker(symbol)
+                    usd_value = amount * ticker["last"]
+                except Exception:
+                    continue
 
             portfolio_value += usd_value
             asset_breakdown[asset] = round(usd_value, 2)
             asset_amount[asset] = amount
 
-        ###For the total unrealized P/L and the cost basis
-        trades = await exchange.fetch_my_trades()
-        for trade in trades:
-            if trade["side"] == "buy":
-                cost = trade["cost"]
-                if cost:
-                    total_cost_basis += cost
+        # trades
+        for asset in asset_amount.keys():
+            if asset in STABLE_COINS:
+                continue
+
+            symbol = f"{asset}/USD"
+
+            try:
+                trades = await exchange.fetch_my_trades(symbol)
+
+                for trade in trades:
+                    if trade["side"] == "buy":
+                        total_cost_basis += trade["cost"]
+
+            except Exception:
+                continue
+
         unrealised_pl = portfolio_value - total_cost_basis
+
+        result = await db.execute(
+            select(PortfolioSnapshot.portfolio_value)
+            .where(PortfolioSnapshot.user_id == user.id)
+            .order_by(PortfolioSnapshot.created_at.desc())
+            .limit(1)
+        )
+
+        snapshot_value = result.scalar_one_or_none()
+
+        if snapshot_value:
+            profit_24h = portfolio_value - snapshot_value
+        else:
+            profit_24h = 0.0
+
         return {
             "total_portfolio_value": round(portfolio_value, 2),
             "total_asset_breakdown": asset_breakdown,
             "total_unrealized_p/l": round(unrealised_pl, 2),
+            "total_unrealized_p/l(24h)": round(profit_24h, 2),
             "total_cost_basis": round(total_cost_basis, 2),
             "total_asset_amount": asset_amount,
         }
