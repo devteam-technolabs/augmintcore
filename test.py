@@ -532,75 +532,75 @@
 
 ########################### Testing ticker and candles starts  ###########################
 
-import asyncio
-import json
+# import asyncio
+# import json
 
-import websockets
+# import websockets
 
-COINBASE_WS_URL = "wss://advanced-trade-ws.coinbase.com"
-
-
-async def main():
-    print("🌍 Connecting to Coinbase Advanced Trade WebSocket...")
-
-    async with websockets.connect(
-        COINBASE_WS_URL,
-        ping_interval=20,
-        ping_timeout=20,
-    ) as ws:
-
-        print("✅ Connected!")
-
-        subscribe_message = {
-            "type": "subscribe",
-            "product_ids": ["ETH-USD"],
-            "channel": "ticker",
-        }
-
-        print("📡 Sending subscribe message...")
-        await ws.send(json.dumps(subscribe_message))
-        print("📡 Subscribed to ETH-USD candles")
-
-        print("⏳ Listening for messages...\n")
-
-        async for message in ws:
-            print("📥 RAW MESSAGE:")
-            print(message)
-            print("-" * 60)
+# COINBASE_WS_URL = "wss://advanced-trade-ws.coinbase.com"
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# async def main():
+#     print("🌍 Connecting to Coinbase Advanced Trade WebSocket...")
+
+#     async with websockets.connect(
+#         COINBASE_WS_URL,
+#         ping_interval=20,
+#         ping_timeout=20,
+#     ) as ws:
+
+#         print("✅ Connected!")
+
+#         subscribe_message = {
+#             "type": "subscribe",
+#             "product_ids": ["ETH-USD"],
+#             "channel": "ticker",
+#         }
+
+#         print("📡 Sending subscribe message...")
+#         await ws.send(json.dumps(subscribe_message))
+#         print("📡 Subscribed to ETH-USD candles")
+
+#         print("⏳ Listening for messages...\n")
+
+#         async for message in ws:
+#             print("📥 RAW MESSAGE:")
+#             print(message)
+#             print("-" * 60)
+
+
+# if __name__ == "__main__":
+#     asyncio.run(main())
 
 
 ########################### Testing ticker and candles ends  ###########################
 
 
-# import ccxt
-# import json
+import ccxt
+import json
 
-# # Load raw markets from Coinbase
-# exchange = ccxt.coinbase({'enableRateLimit': True})
-# raw_markets = exchange.load_markets()
+# Load raw markets from Coinbase
+exchange = ccxt.coinbase({'enableRateLimit': True})
+raw_markets = exchange.load_markets()
 
-# # Save COMPLETE raw response (first market object + full dict size info)
-# first_market = dict(raw_markets['BTC/USD']) if 'BTC/USD' in raw_markets else dict(list(raw_markets.values())[0])
-# raw_response = {
-#     "first_market_sample": first_market,
-#     "total_markets": len(raw_markets),
-#     "markets_keys_sample": list(raw_markets.keys())[:20],
-#     "full_markets_structure": "Paste the first_market_sample below to analyze"
-# }
+# Save COMPLETE raw response (first market object + full dict size info)
+first_market = dict(raw_markets['BTC/USD']) if 'BTC/USD' in raw_markets else dict(list(raw_markets.values())[0])
+raw_response = {
+    "first_market_sample": first_market,
+    "total_markets": len(raw_markets),
+    "markets_keys_sample": list(raw_markets.keys())[:20],
+    "full_markets_structure": "Paste the first_market_sample below to analyze"
+}
 
-# # Also save complete raw markets dict (huge file ~10MB)
-# with open('raw_coinbase_markets_full.json', 'w') as f:
-#     json.dump(raw_markets, f, indent=2)
+# Also save complete raw markets dict (huge file ~10MB)
+with open('raw_coinbase_markets_full.json', 'w') as f:
+    json.dump(raw_markets, f, indent=2)
 
-# with open('raw_markets_summary.json', 'w') as f:
-#     json.dump(raw_response, f, indent=4)
+with open('raw_markets_summary.json', 'w') as f:
+    json.dump(raw_response, f, indent=4)
 
-# print("✅ Saved:")
-# print("1. raw_coinbase_markets_full.json (COMPLETE 10MB file)")
-# print("2. raw_markets_summary.json (sample for analysis)")
-# print("\n📋 FIRST MARKET OBJECT (copy this to me):")
-# print(json.dumps(first_market, indent=2))
+print("✅ Saved:")
+print("1. raw_coinbase_markets_full.json (COMPLETE 10MB file)")
+print("2. raw_markets_summary.json (sample for analysis)")
+print("\n📋 FIRST MARKET OBJECT (copy this to me):")
+print(json.dumps(first_market, indent=2))
