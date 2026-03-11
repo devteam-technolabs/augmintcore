@@ -7,6 +7,7 @@ alembic==1.17.1
 annotated-doc==0.0.3
 annotated-types==0.7.0
 anyio==4.11.0
+asyncio==4.0.0
 asyncpg==0.30.0
 attrs==25.4.0
 bcrypt==3.2.2
@@ -19,8 +20,10 @@ certifi==2025.10.5
 cffi==2.0.0
 charset-normalizer==3.4.4
 click==8.3.0
+click-spinner==0.1.10
 coincurve==21.0.0
 coingecko_sdk==1.12.0
+croniter==1.4.1
 cryptography==46.0.3
 distro==1.9.0
 dnspython==2.8.0
@@ -29,6 +32,7 @@ email-validator==2.3.0
 fastapi==0.121.1
 fastapi-cli==0.0.14
 fastapi-cloud-cli==0.3.1
+fastapi-utilities==0.3.1
 frozenlist==1.8.0
 gevent==25.9.1
 google-api-core==2.28.1
@@ -82,6 +86,7 @@ pytokens==0.3.0
 pytz==2025.2
 PyYAML==6.0.3
 qrcode==8.2
+redis==7.2.0
 requests==2.32.5
 rich==14.2.0
 rich-toolkit==0.15.1
