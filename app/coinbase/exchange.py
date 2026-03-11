@@ -5,6 +5,7 @@ import asyncio
 import functools
 import json
 import math
+import traceback
 from datetime import datetime, timedelta, timezone
 
 # -----------------------------------------
@@ -1243,15 +1244,34 @@ async def get_real_profit_loss(
 
 
 async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
+    print("\n🚀 Starting dashboard calculation")
+    print(f"👤 User ID: {user.id}")
+    print(f"🏦 Exchange: {exchange_name}")
+
     exchange = None
-    keys = await get_keys(exchange_name, user.id, db)
 
     try:
+        print("🔑 Fetching API keys...")
+        keys = await get_keys(exchange_name, user.id, db)
+        print("🔑 Keys received")
+
+        print("🌐 Creating Coinbase exchange instance")
         exchange = await get_working_coinbase_exchange(
-            keys["api_key"], keys["api_secret"], keys.get("passphrase", "")
+            keys["api_key"],
+            keys["api_secret"],
+            keys.get("passphrase", "")
         )
 
-        balance = await exchange.fetch_balance()
+        print("💰 Fetching balance")
+        # balance = await exchange.fetch_balance()
+
+        # total_assets_balance = balance["total"]
+
+        balance = getattr(exchange, "_cached_validation_balance", None)
+
+        if not balance:
+            raise Exception("Balance cache missing")
+
         total_assets_balance = balance["total"]
 
         STABLE_COINS = {"USDC", "USDT"}
@@ -1261,7 +1281,12 @@ async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
         asset_breakdown = {}
         asset_amount = {}
 
+        print("📦 Processing assets")
+
         for asset, amount in total_assets_balance.items():
+
+            print(f"➡️ Asset: {asset}, amount: {amount}")
+
             if amount == 0:
                 continue
 
@@ -1269,34 +1294,48 @@ async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
                 usd_value = amount
             else:
                 symbol = f"{asset}/USD"
+
                 try:
+                    print(f"📈 Fetching ticker for {symbol}")
                     ticker = await exchange.fetch_ticker(symbol)
                     usd_value = amount * ticker["last"]
-                except Exception:
+
+                except Exception as e:
+                    print(f"⚠️ Failed to fetch ticker for {symbol}: {e}")
                     continue
 
             portfolio_value += usd_value
             asset_breakdown[asset] = round(usd_value, 2)
             asset_amount[asset] = amount
 
-        # trades
+        print("📊 Portfolio value:", portfolio_value)
+
+        print("📑 Fetching trade history")
+
         for asset in asset_amount.keys():
+
             if asset in STABLE_COINS:
                 continue
 
             symbol = f"{asset}/USD"
 
             try:
+                print(f"📜 Fetching trades for {symbol}")
                 trades = await exchange.fetch_my_trades(symbol)
 
                 for trade in trades:
                     if trade["side"] == "buy":
                         total_cost_basis += trade["cost"]
 
-            except Exception:
+            except Exception as e:
+                print(f"⚠️ Trade fetch failed for {symbol}: {e}")
                 continue
 
+        print("💵 Total cost basis:", total_cost_basis)
+
         unrealised_pl = portfolio_value - total_cost_basis
+
+        print("🧾 Fetching portfolio snapshot from DB")
 
         result = await db.execute(
             select(PortfolioSnapshot.portfolio_value)
@@ -1307,12 +1346,14 @@ async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
 
         snapshot_value = result.scalar_one_or_none()
 
+        print("📊 Snapshot value:", snapshot_value)
+
         if snapshot_value:
             profit_24h = portfolio_value - snapshot_value
         else:
             profit_24h = 0.0
 
-        return {
+        dashboard = {
             "total_portfolio_value": round(portfolio_value, 2),
             "total_asset_breakdown": asset_breakdown,
             "total_unrealized_p/l": round(unrealised_pl, 2),
@@ -1321,6 +1362,103 @@ async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
             "total_asset_amount": asset_amount,
         }
 
+        print("✅ Dashboard calculated successfully")
+
+        return dashboard
+
+    except Exception as e:
+        print("🔥 CRITICAL ERROR in dashboard calculation:", e)
+        traceback.print_exc()
+        raise
+
     finally:
         if exchange:
+            print("🔌 Closing exchange connection")
             await exchange.close()
+
+
+
+
+
+# async def calculate_dashboard(exchange_name: str, user, db: AsyncSession):
+#     exchange = None
+#     keys = await get_keys(exchange_name, user.id, db)
+
+#     try:
+#         exchange = await get_working_coinbase_exchange(
+#             keys["api_key"], keys["api_secret"], keys.get("passphrase", "")
+#         )
+
+#         balance = await exchange.fetch_balance()
+#         total_assets_balance = balance["total"]
+
+#         STABLE_COINS = {"USDC", "USDT"}
+
+#         portfolio_value = 0.0
+#         total_cost_basis = 0.0
+#         asset_breakdown = {}
+#         asset_amount = {}
+
+#         for asset, amount in total_assets_balance.items():
+#             if amount == 0:
+#                 continue
+
+#             if asset in STABLE_COINS:
+#                 usd_value = amount
+#             else:
+#                 symbol = f"{asset}/USD"
+#                 try:
+#                     ticker = await exchange.fetch_ticker(symbol)
+#                     usd_value = amount * ticker["last"]
+#                 except Exception:
+#                     continue
+
+#             portfolio_value += usd_value
+#             asset_breakdown[asset] = round(usd_value, 2)
+#             asset_amount[asset] = amount
+
+#         # trades
+#         for asset in asset_amount.keys():
+#             if asset in STABLE_COINS:
+#                 continue
+
+#             symbol = f"{asset}/USD"
+
+#             try:
+#                 trades = await exchange.fetch_my_trades(symbol)
+
+#                 for trade in trades:
+#                     if trade["side"] == "buy":
+#                         total_cost_basis += trade["cost"]
+
+#             except Exception:
+#                 continue
+
+#         unrealised_pl = portfolio_value - total_cost_basis
+
+#         result = await db.execute(
+#             select(PortfolioSnapshot.portfolio_value)
+#             .where(PortfolioSnapshot.user_id == user.id)
+#             .order_by(PortfolioSnapshot.created_at.desc())
+#             .limit(1)
+#         )
+
+#         snapshot_value = result.scalar_one_or_none()
+
+#         if snapshot_value:
+#             profit_24h = portfolio_value - snapshot_value
+#         else:
+#             profit_24h = 0.0
+
+#         return {
+#             "total_portfolio_value": round(portfolio_value, 2),
+#             "total_asset_breakdown": asset_breakdown,
+#             "total_unrealized_p/l": round(unrealised_pl, 2),
+#             "total_unrealized_p/l(24h)": round(profit_24h, 2),
+#             "total_cost_basis": round(total_cost_basis, 2),
+#             "total_asset_amount": asset_amount,
+#         }
+
+#     finally:
+#         if exchange:
+#             await exchange.close()

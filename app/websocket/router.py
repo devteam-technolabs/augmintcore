@@ -216,49 +216,191 @@ async def unified_market_ws(
         #         print("✅ Worker cancelled successfully")
 
 
+
 @router.websocket("/ws/dashboard")
 async def dashboard_ws(
     websocket: WebSocket,
     db: AsyncSession = Depends(get_async_session),
 ):
+
+    print("🔵 Dashboard WS connection attempt")
+
     await websocket.accept()
+
     try:
         auth_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10)
-        print(" Auth message:", auth_msg)
-
         auth_data = json.loads(auth_msg)
         token = auth_data.get("token")
+
         if not token:
-            await websocket.send_json({"error": "Token required"})
             await websocket.close()
             return
 
         user = await get_user_from_token(token, db)
 
         if not user:
-            await websocket.send_json({"error": "Invalid token"})
-            print("Invalid token")
             await websocket.close()
             return
 
-    except asyncio.TimeoutError:
-        await websocket.send_json({"error": "Auth timeout"})
-        await websocket.close()
-        return
-    except Exception as e:
-        print(" Dashboard WS error:", repr(e))
-        await websocket.close()
-
-    user_id = str(user.id)
-    redis = redis_client
-    try:
-        while True:
-            data = await get_cached_dashboard(
-                user_id, redis, lambda: calculate_dashboard("coinbase", user, db)
-            )
-
-            await websocket.send_json(data)
-            await asyncio.sleep(2)  # push interval
-
     except Exception:
         await websocket.close()
+        return
+
+    user_id = str(user.id)
+
+    redis = redis_client
+
+    try:
+
+        while True:
+
+            redis_key = f"dashboard:{user_id}"
+
+            cached = await redis.get(redis_key)
+
+            if cached:
+                payload = json.loads(cached)
+                await websocket.send_json(payload["data"])
+
+            else:
+                await websocket.send_json(
+                    {"info": "dashboard not ready"}
+                )
+
+            await asyncio.sleep(2)
+
+    except WebSocketDisconnect:
+        print(f"🔴 Dashboard socket closed for user {user_id}")
+
+# @router.websocket("/ws/dashboard")
+# async def dashboard_ws(
+#     websocket: WebSocket,
+#     db: AsyncSession = Depends(get_async_session),
+# ):
+#     print("🔵 Dashboard WS connection attempt")
+
+#     await websocket.accept()
+#     print("✅ WebSocket accepted")
+
+#     try:
+#         print("⏳ Waiting for auth message...")
+
+#         auth_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+
+#         print("📩 Auth message received:", auth_msg)
+
+#         auth_data = json.loads(auth_msg)
+#         token = auth_data.get("token")
+
+#         if not token:
+#             print("❌ Token missing")
+#             await websocket.send_json({"error": "Token required"})
+#             await websocket.close()
+#             return
+
+#         print("🔍 Validating token...")
+
+#         user = await get_user_from_token(token, db)
+
+#         if not user:
+#             print("❌ Invalid token")
+#             await websocket.send_json({"error": "Invalid token"})
+#             await websocket.close()
+#             return
+
+#         print(f"🟢 User authenticated: {user.id}")
+
+#     except asyncio.TimeoutError:
+#         print("⏱ Auth timeout")
+#         await websocket.send_json({"error": "Auth timeout"})
+#         await websocket.close()
+#         return
+
+#     except Exception as e:
+#         print("🔥 Auth error:", repr(e))
+#         await websocket.close()
+#         return
+
+#     user_id = str(user.id)
+#     redis = redis_client
+
+#     print(f"📊 Starting dashboard stream for user {user_id}")
+
+#     try:
+#         while True:
+#             print("🔁 Fetching dashboard data...")
+
+#             data = await get_cached_dashboard(
+#                 user_id,
+#                 redis,
+#                 lambda: calculate_dashboard("coinbase", user, db),
+#             )
+
+#             print("📤 Sending dashboard payload")
+
+#             await websocket.send_json(data)
+
+#             print("⏳ Sleeping for 2 seconds")
+
+#             await asyncio.sleep(2)
+
+#     except WebSocketDisconnect:
+#         print(f"🔴 WebSocketDisconnect triggered for user {user_id}")
+
+#     except Exception as e:
+#         print("🔥 Dashboard loop error:", repr(e))
+
+#     finally:
+#         print(f"🧹 Cleaning up dashboard websocket for user {user_id}")
+
+#         try:
+#             await websocket.close()
+#         except Exception:
+#             pass
+
+# @router.websocket("/ws/dashboard")
+# async def dashboard_ws(
+#     websocket: WebSocket,
+#     db: AsyncSession = Depends(get_async_session),
+# ):
+#     await websocket.accept()
+#     try:
+#         auth_msg = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+#         print(" Auth message:", auth_msg)
+
+#         auth_data = json.loads(auth_msg)
+#         token = auth_data.get("token")
+#         if not token:
+#             await websocket.send_json({"error": "Token required"})
+#             await websocket.close()
+#             return
+
+#         user = await get_user_from_token(token, db)
+
+#         if not user:
+#             await websocket.send_json({"error": "Invalid token"})
+#             print("Invalid token")
+#             await websocket.close()
+#             return
+
+#     except asyncio.TimeoutError:
+#         await websocket.send_json({"error": "Auth timeout"})
+#         await websocket.close()
+#         return
+#     except Exception as e:
+#         print(" Dashboard WS error:", repr(e))
+#         await websocket.close()
+
+#     user_id = str(user.id)
+#     redis = redis_client
+#     try:
+#         while True:
+#             data = await get_cached_dashboard(
+#                 user_id, redis, lambda: calculate_dashboard("coinbase", user, db)
+#             )
+
+#             await websocket.send_json(data)
+#             await asyncio.sleep(2)  # push interval
+
+#     except Exception:
+#         await websocket.close()

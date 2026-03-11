@@ -31,6 +31,7 @@ from app.websocket.background.top10_listener import (
     stop_top10_listener,
     top10_coinbase_listener,
 )
+from app.websocket.background.dashboard_worker import dashboard_worker
 
 # from app.api.websocket_routers import coinbase_ws_listener
 # from app.api.websocket_routers import router as websocket_router
@@ -77,6 +78,11 @@ def create_app() -> FastAPI:
         # app.state.coinbase_ws_task = asyncio.create_task(coinbase_ws_listener())
         asyncio.create_task(top10_coinbase_listener())
         logger.warning(" COINBASE WS TASK CREATED")
+
+        # Dashboard worker startup
+        print("🚀 Starting dashboard worker")
+        asyncio.create_task(dashboard_worker())
+
 
         # call optional project-specific startup hook
         if hasattr(events, "startup") and callable(events.startup):
