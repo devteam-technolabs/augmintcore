@@ -32,6 +32,7 @@ from app.websocket.background.top10_listener import (
     top10_coinbase_listener,
 )
 from app.websocket.background.dashboard_worker import dashboard_worker
+from app.services.background.portfolio_snapshot_worker import portfolio_snapshot_worker
 
 # from app.api.websocket_routers import coinbase_ws_listener
 # from app.api.websocket_routers import router as websocket_router
@@ -81,7 +82,12 @@ def create_app() -> FastAPI:
 
         # Dashboard worker startup
         print("🚀 Starting dashboard worker")
-        asyncio.create_task(dashboard_worker())
+        # asyncio.create_task(dashboard_worker())
+        app.state.dashboard_task = asyncio.create_task(dashboard_worker())
+
+        app.state.snapshot_task = asyncio.create_task(
+            portfolio_snapshot_worker()
+        )
 
 
         # call optional project-specific startup hook
@@ -108,6 +114,26 @@ def create_app() -> FastAPI:
         # call optional project-specific shutdown hook
         logger.info("Application shutdown initiated")
         await stop_top10_listener()
+
+        dashboard_task = getattr(app.state, "dashboard_task", None)
+
+        if dashboard_task:
+            dashboard_task.cancel()
+            try:
+                await dashboard_task
+            except asyncio.CancelledError:
+                logger.info("Dashboard worker cancelled successfully")
+
+        snapshot_task = getattr(app.state, "snapshot_task", None)
+
+        if snapshot_task:
+            snapshot_task.cancel()
+            try:
+                await snapshot_task
+            except asyncio.CancelledError:
+                logger.info("Snapshot worker cancelled successfully")
+
+        
         if hasattr(events, "shutdown") and callable(events.shutdown):
             res = events.shutdown()
             if inspect.isawaitable(res):

@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
-DASHBOARD_REFRESH = 30  # seconds
+DASHBOARD_REFRESH = 30
 
 
 async def dashboard_worker():
@@ -21,42 +21,48 @@ async def dashboard_worker():
 
     logger.info("🚀 Dashboard worker started")
 
-    while True:
-        try:
-            async with AsyncSessionLocal() as db:
+    try:
+        while True:
+            try:
+                async with AsyncSessionLocal() as db:
 
-                result = await db.execute(select(User))
-                users = result.scalars().all()
+                    result = await db.execute(select(User))
+                    users = result.scalars().all()
 
-                logger.info(f"📊 Updating dashboard for {len(users)} users")
+                    logger.info(f"📊 Updating dashboard for {len(users)} users")
 
-                for user in users:
+                    for user in users:
 
-                    try:
-                        dashboard = await calculate_dashboard(
-                            "coinbase",
-                            user,
-                            db,
-                        )
+                        try:
+                            dashboard = await calculate_dashboard(
+                                "coinbase",
+                                user,
+                                db,
+                            )
 
-                        redis_key = f"dashboard:{user.id}"
+                            redis_key = f"dashboard:{user.id}"
 
-                        await redis_client.setex(
-                            redis_key,
-                            40,
-                            json.dumps({
-                                "data": dashboard
-                            }),
-                        )
+                            await redis_client.setex(
+                                redis_key,
+                                40,
+                                json.dumps({
+                                    "data": dashboard
+                                }),
+                            )
 
-                        logger.info(f"✅ Cached dashboard for user {user.id}")
+                            logger.info(f"✅ Cached dashboard for user {user.id}")
 
-                    except Exception as e:
-                        logger.warning(
-                            f"⚠️ Dashboard update failed for user {user.id}: {e}"
-                        )
+                        except Exception as e:
+                            logger.warning(
+                                f"⚠️ Dashboard update failed for user {user.id}: {e}"
+                            )
 
-        except Exception as e:
-            logger.error(f"🔥 Worker loop error: {e}")
+            except Exception as e:
+                logger.error(f"🔥 Worker loop error: {e}")
 
-        await asyncio.sleep(DASHBOARD_REFRESH)
+            await asyncio.sleep(DASHBOARD_REFRESH)
+    except asyncio.CancelledError:
+        logger.info("🛑 Dashboard worker stopped")
+        raise
+
+    

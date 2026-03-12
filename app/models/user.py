@@ -193,6 +193,7 @@ class ExchangeOrder(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="exchange_orders")
+
 class PortfolioSnapshot(Base):
     __tablename__ = "portfolio_snapshots"
 

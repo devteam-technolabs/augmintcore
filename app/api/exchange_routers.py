@@ -424,67 +424,65 @@ async def dashboard_data(
         exchange_name=exchange_name, user=current_user, db=db
     )
 
-from app.db.session import AsyncSessionLocal
-@router.on_event("startup")
-@repeat_every(seconds=86400,wait_first=False) 
-async def populate_protfolio_value(
-):  
-    print("RUNNING PORTFOLIO SNAPSHOT TASK")
-    async with AsyncSessionLocal() as db:
-        users_result = await db.execute(select(User))
-        users = users_result.scalars().all()
+# from app.db.session import AsyncSessionLocal
+# @router.on_event("startup")
+# @repeat_every(seconds=86400,wait_first=False) 
+# async def populate_protfolio_value(
+# ):  
+#     print("RUNNING PORTFOLIO SNAPSHOT TASK")
+#     async with AsyncSessionLocal() as db:
+#         users_result = await db.execute(select(User))
+#         users = users_result.scalars().all()
 
-        print("TOTAL USERS:", len(users))
-        for user in users:
-            exchange = None
-            keys = await get_keys(exchange_name="coinbase",user_id=user.id,db=db)
-            print(keys)
-            if not keys:
-                print(f"No exchange keys for user {user.id}")
-                continue
+#         print("TOTAL USERS:", len(users))
+#         for user in users:
+#             exchange = None
+#             keys = await get_keys(exchange_name="coinbase",user_id=user.id,db=db)
+#             print(keys)
+#             if not keys:
+#                 print(f"No exchange keys for user {user.id}")
+#                 continue
 
-            try:
-                exchange = await get_working_coinbase_exchange(
-                    keys["api_key"], keys["api_secret"], keys.get("passphrase", "")
-                )
-                balance = (
-                    exchange._cached_validation_balance
-                    if hasattr(exchange, "_cached_validation_balance")
-                    else await exchange.fetch_balance()
-                )
-                print(balance)
-                total_assets_balance = balance["total"]
-                print(total_assets_balance)
-                STABLE_COINS = {"USDC", "USDT"}
-                # tickers = await exchange.fetch_ticker()
-                portfolio_value = 0.0
+#             try:
+#                 exchange = await get_working_coinbase_exchange(
+#                     keys["api_key"], keys["api_secret"], keys.get("passphrase", "")
+#                 )
+#                 balance = (
+#                     exchange._cached_validation_balance
+#                     if hasattr(exchange, "_cached_validation_balance")
+#                     else await exchange.fetch_balance()
+#                 )
+#                 print(balance)
+#                 total_assets_balance = balance["total"]
+#                 print(total_assets_balance)
+#                 STABLE_COINS = {"USDC", "USDT"}
+#                 # tickers = await exchange.fetch_ticker()
+#                 portfolio_value = 0.0
 
-                for asset, amount in total_assets_balance.items():
-                    if amount == 0:
-                        continue
+#                 for asset, amount in total_assets_balance.items():
+#                     if amount == 0:
+#                         continue
 
-                    if asset in STABLE_COINS:
-                        usd_value = amount
-                    else:
+#                     if asset in STABLE_COINS:
+#                         usd_value = amount
+#                     else:
 
-                        symbol = f"{asset}/USD"
-                        ticker = await exchange.fetch_ticker(symbol)
-                        usd_value = amount * ticker["last"]
-                        # usd_value = amount * price
+#                         symbol = f"{asset}/USD"
+#                         ticker = await exchange.fetch_ticker(symbol)
+#                         usd_value = amount * ticker["last"]
+#                         # usd_value = amount * price
 
-                    portfolio_value += usd_value
-                snapshot = PortfolioSnapshot(
-                        user_id=user.id,
-                        portfolio_value=portfolio_value
-                    )
+#                     portfolio_value += usd_value
+#                 snapshot = PortfolioSnapshot(
+#                         user_id=user.id,
+#                         portfolio_value=portfolio_value
+#                     )
 
-                db.add(snapshot)
-                await db.commit()
-            except Exception as e:
-                print(f"Error processing user {user.id}: {e}")
+#                 db.add(snapshot)
+#                 await db.commit()
+#             except Exception as e:
+#                 print(f"Error processing user {user.id}: {e}")
 
-            finally:
-                if exchange:
-                    await exchange.close()
-
-    
+#             finally:
+#                 if exchange:
+#                     await exchange.close()
